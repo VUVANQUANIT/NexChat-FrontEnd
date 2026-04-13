@@ -1,0 +1,168 @@
+<div class="h-screen flex flex-col bg-gray-50">
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between py-4">
+                <div class="flex items-center">
+                    <button (click)="goBack()"
+                        class="mr-4 p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500">
+                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                        </svg>
+                    </button>
+                    <div>
+                        <h1 class="text-xl font-semibold text-gray-900">
+                            {{ currentConversation()?.name || 'Chat' }}
+                        </h1>
+                        @if (typingUsers().length > 0) {
+                        <p class="text-sm text-gray-500">
+                            {{ typingUsers().length === 1 ? typingUsers()[0].username : `${typingUsers().length} people`
+                            }} {{ typingUsers().length === 1 ? 'is' : 'are' }} typing...
+                        </p>
+                        } @else if (currentConversation()?.type === 'GROUP') {
+                        <p class="text-sm text-gray-500">
+                            {{ currentConversation()?.participants?.length || 0 }} members
+                        </p>
+                        }
+                    </div>
+                </div>
+
+                <!-- Group Actions -->
+                @if (currentConversation()?.type === 'GROUP') {
+                <div class="flex items-center space-x-2">
+                    <button (click)="addMember()"
+                        class="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200">
+                        Add Member
+                    </button>
+                    <button (click)="leaveGroup()"
+                        class="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200">
+                        Leave Group
+                    </button>
+                </div>
+                }
+            </div>
+        </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden">
+        <!-- Messages -->
+        <div class="flex-1 overflow-y-auto px-4 py-6" #messagesContainer>
+            <div class="max-w-4xl mx-auto space-y-4">
+                @for (message of messages(); track message.id || message.clientMessageId) {
+                <div class="flex {{ isMessageFromCurrentUser(message) ? 'justify-end' : 'justify-start' }}">
+                    <div class="max-w-xs lg:max-w-md px-4 py-2 rounded-lg {{
+                  isMessageFromCurrentUser(message)
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-white text-gray-900 border'
+                }} {{
+                  message.status === 'SENDING' ? 'opacity-70' :
+                  message.status === 'FAILED' ? 'bg-red-100 text-red-900 border-red-300' : ''
+                }}">
+                        @if (!isMessageFromCurrentUser(message) && currentConversation()?.type === 'GROUP') {
+                        <p class="text-xs font-semibold mb-1 opacity-75">{{ message.sender.username }}</p>
+                        }
+                        <p class="text-sm">{{ message.content }}</p>
+                        <div class="flex items-center justify-between mt-1">
+                            <p class="text-xs opacity-75">
+                                {{ formatMessageTime(message.createdAt) }}
+                            </p>
+                            @if (message.status === 'SENDING') {
+                            <svg class="animate-spin h-3 w-3 opacity-75" xmlns="http://www.w3.org/2000/svg" fill="none"
+                                viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                    stroke-width="4">
+                                </circle>
+                                <path class="opacity-75" fill="currentColor"
+                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                                </path>
+                            </svg>
+                            } @else if (message.status === 'FAILED') {
+                            <button class="text-xs underline opacity-75 hover:opacity-100">
+                                Retry
+                            </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+                }
+
+                <!-- Typing indicator -->
+                @if (typingUsers().length > 0) {
+                <div class="flex justify-start">
+                    <div class="bg-gray-200 px-4 py-2 rounded-lg">
+                        <div class="flex space-x-1">
+                            <div class="flex space-x-1">
+                                <div class="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
+                                <div class="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
+                                    style="animation-delay: 0.1s">
+                                </div>
+                                <div class="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
+                                    style="animation-delay: 0.2s">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                }
+            </div>
+        </div>
+
+        <!-- Participant List Sidebar -->
+        @if (currentConversation()?.type === 'GROUP') {
+        <div class="hidden lg:block w-64 bg-white border-l overflow-y-auto">
+            <div class="p-4">
+                <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Participants</h2>
+                <ul class="space-y-3">
+                    @for (participant of currentConversation()?.participants; track participant.id) {
+                    <li class="flex items-center justify-between group">
+                        <div class="flex items-center">
+                            <div class="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-semibold">
+                                {{ participant.username.charAt(0).toUpperCase() }}
+                            </div>
+                            <span class="ml-3 text-sm text-gray-700">{{ participant.username }}</span>
+                        </div>
+                        @if (participant.id !== currentUser()?.id) {
+                        <button (click)="kickMember(participant.id)" 
+                            class="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700 p-1 transition-opacity">
+                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                        }
+                    </li>
+                    }
+                </ul>
+            </div>
+        </div>
+        }
+    </div>
+
+    <!-- Message Input -->
+    <div class="bg-white border-t px-4 py-4">
+        <div class="max-w-4xl mx-auto">
+            <form [formGroup]="messageForm" (ngSubmit)="sendMessage()" class="flex space-x-4">
+                <div class="flex-1">
+                    <textarea formControlName="content" (input)="onTyping()" rows="1"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 resize-none"
+                        placeholder="Type a message..." maxlength="1000"
+                        (keydown.enter)="$event.preventDefault(); sendMessage()"></textarea>
+                </div>
+                <button type="submit" [disabled]="messageForm.invalid || isSending()"
+                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                    @if (isSending()) {
+                    <svg class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none"
+                        viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4">
+                        </circle>
+                        <path class="opacity-75" fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                        </path>
+                    </svg>
+                    } @else {
+                    Send
+                    }
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
