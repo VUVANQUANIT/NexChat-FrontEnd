@@ -67,6 +67,14 @@ export class ChatStore {
         );
     }
 
+    mergeMessage(identifier: string | number, partial: Partial<Message>): void {
+        this.messages.update(current =>
+            current.map(msg =>
+                msg.id === identifier || msg.clientMessageId === identifier ? { ...msg, ...partial } : msg
+            )
+        );
+    }
+
     removeMessage(messageId: number): void {
         this.messages.update(current =>
             current.filter(msg => msg.id !== messageId)

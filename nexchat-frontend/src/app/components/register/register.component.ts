@@ -28,6 +28,7 @@ export class RegisterComponent {
 
     constructor() {
         this.registerForm = this.fb.group({
+            fullName: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(100)]],
             username: ['', [Validators.required, Validators.minLength(3), Validators.maxLength(50), Validators.pattern('^[a-zA-Z0-9_.-]+$')]],
             email: ['', [Validators.required, Validators.email, Validators.maxLength(100)]],
             password: ['', [
@@ -65,7 +66,14 @@ export class RegisterComponent {
             return;
         }
 
-        const data: RegisterRequest = this.registerForm.value;
+        const formValue = this.registerForm.value;
+        const data: RegisterRequest = {
+            fullName: formValue.fullName,
+            username: formValue.username,
+            email: formValue.email,
+            password: formValue.password,
+            confirmPassword: formValue.confirmPassword
+        };
 
         try {
             await this.authService.register(data);

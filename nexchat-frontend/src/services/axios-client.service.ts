@@ -36,6 +36,11 @@ export class AxiosClientService {
         if (token && config.headers) {
           config.headers.Authorization = `Bearer ${token}`;
         }
+        console.info('[API] request', {
+          method: config.method?.toUpperCase(),
+          url: `${config.baseURL || API_BASE_URL}${config.url || ''}`,
+          params: config.params
+        });
         return config;
       },
       (error) => Promise.reject(error)
@@ -44,10 +49,19 @@ export class AxiosClientService {
     // Response interceptor: Handle errors and unwrap data
     this.axiosClient.interceptors.response.use(
       (response: AxiosResponse) => {
+        console.info('[API] response', {
+          status: response.status,
+          url: `${response.config.baseURL || API_BASE_URL}${response.config.url || ''}`
+        });
         // Backend wraps responses in { success, message, data }
         return response.data?.data || response.data;
       },
       (error) => {
+        console.error('[API] error', {
+          status: error?.response?.status,
+          url: `${error?.config?.baseURL || API_BASE_URL}${error?.config?.url || ''}`,
+          message: error?.response?.data?.message || error?.message
+        });
         const originalRequest = error.config;
 
         if (error.response?.status === 401 && !originalRequest._retry) {

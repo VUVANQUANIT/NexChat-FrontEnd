@@ -152,6 +152,7 @@ Tạo tài khoản mới. Hash password, issue access token + refresh token ngay
 {
   "username": "john_doe",
   "email": "john@example.com",
+  "fullname":"Vũ Văn Quân",
   "password": "Secret@123",
   "confirmPassword": "Secret@123"
 }
