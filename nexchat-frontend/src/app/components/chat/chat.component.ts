@@ -7,6 +7,7 @@ import { ChatStore } from '../../../stores/chat.store';
 import { AuthService } from '../../../services/auth.service';
 import { WebSocketService } from '../../../services/websocket.service';
 import { v4 as uuidv4 } from 'uuid';
+import { StompSubscription } from '@stomp/stompjs';
 
 @Component({
     selector: 'app-chat',
@@ -35,10 +36,10 @@ export class ChatComponent implements OnInit, OnDestroy {
     typingUsers = this.chatStore.typingUsers;
     isSending = this.chatStore.isSendingMessage;
 
-    private chatSubscription: any;
-    private typingSubscription: any;
-    private presenceSubscription: any;
-    private typingTimeout: any;
+    private chatSubscription: StompSubscription | null = null;
+    private typingSubscription: StompSubscription | null = null;
+    private presenceSubscription: StompSubscription | null = null;
+    private typingTimeout: ReturnType<typeof setTimeout> | null = null;
 
     ngOnInit(): void {
         this.conversationId = Number(this.route.snapshot.paramMap.get('id'));
@@ -88,14 +89,17 @@ export class ChatComponent implements OnInit, OnDestroy {
         const stomp = this.wsService.getClient();
         if (!stomp) return;
 
+        type MessageEventPayload = { event?: string; message?: Message };
+        type TypingEventPayload = { isTyping?: boolean; user?: Message['sender'] };
+
         // Subscribe to conversation messages
-        this.chatSubscription = this.wsService.subscribe(
+        this.chatSubscription = this.wsService.subscribe<MessageEventPayload>(
             `/topic/conversations/${this.conversationId}`,
             (message) => this.handleMessageEvent(message)
         );
 
         // Subscribe to typing indicators
-        this.typingSubscription = this.wsService.subscribe(
+        this.typingSubscription = this.wsService.subscribe<TypingEventPayload>(
             `/topic/typing/${this.conversationId}`,
             (message) => this.handleTypingEvent(message)
         );
@@ -107,7 +111,9 @@ export class ChatComponent implements OnInit, OnDestroy {
         );
     }
 
-    private handleMessageEvent(data: any): void {
+    private handleMessageEvent(data: { event?: string; message?: Message }): void {
+        if (!data.message || !data.event) return;
+
         switch (data.event) {
             case 'MESSAGE_NEW':
                 this.chatStore.addMessage(data.message);
@@ -186,7 +192,8 @@ export class ChatComponent implements OnInit, OnDestroy {
         }
     }
 
-    private handleTypingEvent(data: any): void {
+    private handleTypingEvent(data: { isTyping?: boolean; user?: Message['sender'] }): void {
+        if (!data.user) return;
         if (data.isTyping) {
             this.chatStore.addTypingUser(data.user);
         } else {
@@ -194,7 +201,7 @@ export class ChatComponent implements OnInit, OnDestroy {
         }
     }
 
-    private handlePresenceEvent(data: any): void {
+    private handlePresenceEvent(data: unknown): void {
         // Handle presence updates if needed
         console.log('Presence update:', data);
     }
@@ -205,6 +212,7 @@ export class ChatComponent implements OnInit, OnDestroy {
         this.presenceSubscription?.unsubscribe();
         if (this.typingTimeout) {
             clearTimeout(this.typingTimeout);
+            this.typingTimeout = null;
         }
     }
 
@@ -249,7 +257,7 @@ export class ChatComponent implements OnInit, OnDestroy {
             this.chatStore.updateMessage(tempId, sentMessage);
         } catch (error) {
             // Mark as failed
-            this.chatStore.updateMessage(tempId, { ...tempMessage, status: 'FAILED' as any });
+            this.chatStore.updateMessage(tempId, { ...tempMessage, status: 'FAILED' });
             console.error('Failed to send message:', error);
         }
     }

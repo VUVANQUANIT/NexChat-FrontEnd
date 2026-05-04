@@ -45,6 +45,12 @@ export interface MessagesResponse {
     hasMore: boolean;
 }
 
+type PagingParams = {
+    limit: number;
+    cursor?: string;
+    beforeId?: number;
+};
+
 @Injectable({
     providedIn: 'root'
 })
@@ -53,7 +59,7 @@ export class ChatService {
 
     // Conversations
     async getConversations(cursor?: string, limit: number = 20): Promise<ConversationsResponse> {
-        const params: any = { limit };
+        const params: PagingParams = { limit };
         if (cursor) {
             params.cursor = cursor;
         }
@@ -77,7 +83,7 @@ export class ChatService {
 
     // Messages
     async getMessages(conversationId: number, beforeId?: number, limit: number = 30): Promise<MessagesResponse> {
-        const params: any = { limit };
+        const params: PagingParams = { limit };
         if (beforeId) {
             params.beforeId = beforeId;
         }
