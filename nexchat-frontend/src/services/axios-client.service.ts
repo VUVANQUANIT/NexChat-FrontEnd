@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { ToastService } from './toast.service';
 import { Router } from '@angular/router';
-import { API_BASE_URL } from '../app/config/api.config';
+import { API_BASE_URL, ENABLE_API_LOGGING } from '../app/config/api.config';
 
 @Injectable({
   providedIn: 'root'
@@ -36,11 +36,13 @@ export class AxiosClientService {
         if (token && config.headers) {
           config.headers.Authorization = `Bearer ${token}`;
         }
-        console.info('[API] request', {
-          method: config.method?.toUpperCase(),
-          url: `${config.baseURL || API_BASE_URL}${config.url || ''}`,
-          params: config.params
-        });
+        if (ENABLE_API_LOGGING) {
+          console.info('[API] request', {
+            method: config.method?.toUpperCase(),
+            url: `${config.baseURL || API_BASE_URL}${config.url || ''}`,
+            params: config.params
+          });
+        }
         return config;
       },
       (error) => Promise.reject(error)
@@ -49,19 +51,23 @@ export class AxiosClientService {
     // Response interceptor: Handle errors and unwrap data
     this.axiosClient.interceptors.response.use(
       (response: AxiosResponse) => {
-        console.info('[API] response', {
-          status: response.status,
-          url: `${response.config.baseURL || API_BASE_URL}${response.config.url || ''}`
-        });
+        if (ENABLE_API_LOGGING) {
+          console.info('[API] response', {
+            status: response.status,
+            url: `${response.config.baseURL || API_BASE_URL}${response.config.url || ''}`
+          });
+        }
         // Backend wraps responses in { success, message, data }
         return response.data?.data || response.data;
       },
       (error) => {
-        console.error('[API] error', {
-          status: error?.response?.status,
-          url: `${error?.config?.baseURL || API_BASE_URL}${error?.config?.url || ''}`,
-          message: error?.response?.data?.message || error?.message
-        });
+        if (ENABLE_API_LOGGING) {
+          console.error('[API] error', {
+            status: error?.response?.status,
+            url: `${error?.config?.baseURL || API_BASE_URL}${error?.config?.url || ''}`,
+            message: error?.response?.data?.message || error?.message
+          });
+        }
         const originalRequest = error.config;
 
         if (error.response?.status === 401 && !originalRequest._retry) {

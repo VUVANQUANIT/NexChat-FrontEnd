@@ -1,4 +1,5 @@
 import { Injectable, signal } from '@angular/core';
+import { ApiFieldError, isApiErrorResponse } from '../app/api/api-error.dto';
 
 export interface Toast {
     id: string;
@@ -38,15 +39,41 @@ export class ToastService {
         this.toasts.update(current => current.filter(t => t.id !== id));
     }
 
-    handleBackendError(error: any): void {
-        if (error.code === 'VALIDATION_FAILED' && error.errors) {
-            error.errors.forEach((e: any) => this.error(`${e.field}: ${e.message}`));
-        } else if (error.code === 'CANNOT_INVATE_BLOCK') {
-            this.error('Cannot invite this user due to block relationship.');
-        } else if (error.code === 'FORBIDDEN') {
-            this.error('You do not have permission to perform this action.');
-        } else {
-            this.error(error.message || 'An unexpected error occurred. Please try again.');
+    handleBackendError(error: unknown): void {
+        if (!isApiErrorResponse(error)) {
+            const msg =
+                error instanceof Error ? error.message : 'An unexpected error occurred. Please try again.';
+            this.error(msg);
+            return;
         }
+
+        if (error.code === 'VALIDATION_FAILED' && Array.isArray(error.errors)) {
+            error.errors.forEach((fieldErr: ApiFieldError) =>
+                this.error(`${fieldErr.field}: ${fieldErr.message}`)
+            );
+            return;
+        }
+
+        if (error.code === 'CANNOT_INVITE_BLOCK' || error.code === 'CANNOT_INVATE_BLOCK') {
+            this.error('Cannot invite this user due to block relationship.');
+            return;
+        }
+
+        if (error.code === 'FORBIDDEN') {
+            this.error('You do not have permission to perform this action.');
+            return;
+        }
+
+        if (error.code === 'UNAUTHORIZED' || error.code === 'INVALID_CREDENTIALS') {
+            this.error(error.message || 'Authentication failed.');
+            return;
+        }
+
+        if (error.code === 'RESOURCE_NOT_FOUND') {
+            this.error(error.message || 'Resource not found.');
+            return;
+        }
+
+        this.error(error.message || 'An unexpected error occurred. Please try again.');
     }
 }

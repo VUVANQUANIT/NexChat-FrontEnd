@@ -133,12 +133,26 @@ export class ChatService {
         };
     }
 
-    async sendMessage(conversationId: number, content: string, type: 'TEXT' | 'IMAGE' | 'FILE' = 'TEXT', clientMessageId?: string): Promise<Message> {
-        const raw = await this.axiosClient.post<ApiMessageRow>(`/conversations/${conversationId}/messages`, {
-            content,
-            type,
-            clientMessageId
-        });
+    async sendMessage(
+        conversationId: number,
+        content: string,
+        type: 'TEXT' | 'IMAGE' | 'FILE' = 'TEXT',
+        clientMessageId?: string,
+        replyToId?: number | null
+    ): Promise<Message> {
+        const body: {
+            content: string;
+            type: typeof type;
+            clientMessageId?: string;
+            replyToId?: number | null;
+        } = { content, type };
+        if (clientMessageId) {
+            body.clientMessageId = clientMessageId;
+        }
+        if (replyToId !== undefined && replyToId !== null) {
+            body.replyToId = replyToId;
+        }
+        const raw = await this.axiosClient.post<ApiMessageRow>(`/conversations/${conversationId}/messages`, body);
         return mapApiMessageRowToMessage(raw);
     }
 

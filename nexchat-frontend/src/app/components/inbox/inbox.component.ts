@@ -8,6 +8,7 @@ import { AuthService, UserProfile } from '../../../services/auth.service';
 import { UserService } from '../../../services/user.service';
 import { FriendshipService } from '../../../services/friendship.service';
 import { ToastService } from '../../../services/toast.service';
+import { ENABLE_API_LOGGING } from '../../config/api.config';
 import { signal } from '@angular/core';
 
 @Component({
@@ -92,7 +93,9 @@ export class InboxComponent implements OnInit {
 
         const searchToken = ++this.activeSearchToken;
         this.isSearchingFriends.set(true);
-        console.info('[FriendSearch] start', { query });
+        if (ENABLE_API_LOGGING) {
+            console.info('[FriendSearch] start', { query });
+        }
         try {
             const res = await this.userService.searchUsers(query);
             if (searchToken !== this.activeSearchToken) {
@@ -100,12 +103,16 @@ export class InboxComponent implements OnInit {
             }
             const currentUserId = this.currentUser()?.id;
             this.friendResults.set(res.content.filter(user => user.id !== currentUserId));
-            console.info('[FriendSearch] success', { query, count: res.content.length });
+            if (ENABLE_API_LOGGING) {
+                console.info('[FriendSearch] success', { query, count: res.content.length });
+            }
         } catch (error) {
             if (searchToken !== this.activeSearchToken) {
                 return;
             }
-            console.error('[FriendSearch] failed', { query, error });
+            if (ENABLE_API_LOGGING) {
+                console.error('[FriendSearch] failed', { query, error });
+            }
             this.toastService.handleBackendError(error);
         } finally {
             if (searchToken === this.activeSearchToken) {
