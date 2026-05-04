@@ -5,6 +5,7 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angula
 import { ChatService, Message } from '../../../services/chat.service';
 import { ChatStore } from '../../../stores/chat.store';
 import { AuthService } from '../../../services/auth.service';
+import { UserService } from '../../../services/user.service';
 import { WebSocketService } from '../../../services/websocket.service';
 import { v4 as uuidv4 } from 'uuid';
 import { StompSubscription } from '@stomp/stompjs';
@@ -22,6 +23,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     private readonly chatService = inject(ChatService);
     private readonly chatStore = inject(ChatStore);
     private readonly authService = inject(AuthService);
+    private readonly userService = inject(UserService);
     private readonly wsService = inject(WebSocketService);
     private readonly fb = inject(FormBuilder);
 
@@ -232,8 +234,8 @@ export class ChatComponent implements OnInit, OnDestroy {
         if (!username) return;
 
         try {
-            const users = await this.chatService.searchUsers(username);
-            const user = users.find(u => u.username.toLowerCase() === username.toLowerCase());
+            const res = await this.userService.searchUsers(username);
+            const user = res.content.find(u => u.username.toLowerCase() === username.toLowerCase());
             if (user) {
                 await this.chatService.addParticipants(this.conversationId, [user.id]);
                 // Reload conversation details to update participant list
