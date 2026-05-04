@@ -22,6 +22,8 @@ export class LoginComponent {
     isLoading = this.authStore.isLoading;
     error = this.authStore.error;
 
+    showPassword = signal(false);
+
     constructor() {
         this.loginForm = this.fb.group({
             username: ['', [Validators.required, Validators.minLength(3)]],
@@ -32,6 +34,10 @@ export class LoginComponent {
         if (this.authService.isAuthenticated()) {
             this.router.navigate(['/inbox']);
         }
+    }
+
+    togglePassword(): void {
+        this.showPassword.update(v => !v);
     }
 
     async onSubmit(): Promise<void> {

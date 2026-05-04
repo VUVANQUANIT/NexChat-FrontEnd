@@ -45,12 +45,39 @@ export class AxiosClientService {
         return response.data?.data || response.data;
       },
       (error) => {
-        if (error.response?.status === 401) {
+        const originalRequest = error.config;
+
+        if (error.response?.status === 401 && !originalRequest._retry) {
           // Token expired or invalid
-          console.error('Token expired or invalid');
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
-          // TODO: Redirect to login or attempt refresh
+          console.warn('Token expired or invalid, attempting refresh...');
+          originalRequest._retry = true;
+
+          const refreshToken = localStorage.getItem('refresh_token');
+          if (refreshToken) {
+            const refreshUrl = `${originalRequest.baseURL || 'http://localhost:8080/api'}/auth/refresh`;
+            return axios.post(refreshUrl, { refresh_token: refreshToken }, {
+              headers: { 'Content-Type': 'application/json' }
+            }).then((res) => {
+              const data = res.data?.data || res.data;
+              localStorage.setItem('access_token', data.access_token);
+              if (data.refresh_token) {
+                localStorage.setItem('refresh_token', data.refresh_token);
+              }
+              // Update authorization header for the original request
+              originalRequest.headers.Authorization = `Bearer ${data.access_token}`;
+              return this.axiosClient(originalRequest);
+            }).catch((refreshError) => {
+              console.error('Refresh token failed', refreshError);
+              localStorage.removeItem('access_token');
+              localStorage.removeItem('refresh_token');
+              // Redirect to login handled by AuthGuard or here
+              window.location.href = '/login';
+              return Promise.reject(refreshError);
+            });
+          } else {
+             localStorage.removeItem('access_token');
+             window.location.href = '/login';
+          }
         }
 
         const backendError = error.response?.data;
