@@ -143,13 +143,11 @@ export class InboxComponent implements OnInit {
     }
 
     getConversationDisplayName(conversation: Conversation): string {
-        if (conversation.type === 'DIRECT') {
-            // Find the other participant
+        if (conversation.type === 'PRIVATE') {
             const otherParticipant = conversation.participants.find(p => p.id !== this.currentUser()?.id);
-            return otherParticipant?.username || 'Unknown User';
-        } else {
-            return conversation.name;
+            return otherParticipant?.username || conversation.name || 'Unknown User';
         }
+        return conversation.name;
     }
 
     getLastMessagePreview(conversation: Conversation): string {
