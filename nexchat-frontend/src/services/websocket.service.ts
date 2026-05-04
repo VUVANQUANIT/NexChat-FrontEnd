@@ -1,7 +1,8 @@
 import { Injectable, inject } from '@angular/core';
-import { Client } from '@stomp/stompjs';
+import { Client, IMessage, StompSubscription } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 import { AuthService } from './auth.service';
+import { WS_BASE_URL } from '../app/config/api.config';
 
 @Injectable({
   providedIn: 'root'
@@ -19,7 +20,10 @@ export class WebSocketService {
 
     this.client = new Client({
       // Use SockJS for fallback support
-      webSocketFactory: () => new SockJS(`http://localhost:8080/ws?token=${token}`),
+      webSocketFactory: () => new SockJS(WS_BASE_URL),
+      connectHeaders: {
+        Authorization: `Bearer ${token}`
+      },
 
       reconnectDelay: 5000,
       heartbeatIncoming: 4000,
@@ -53,24 +57,23 @@ export class WebSocketService {
     return this.client;
   }
 
-  subscribe(destination: string, callback: (message: any) => void) {
+  subscribe<T>(destination: string, callback: (message: T) => void): StompSubscription | null {
     if (!this.client?.connected) {
       console.warn('WebSocket not connected, cannot subscribe');
       return null;
     }
 
-    return this.client.subscribe(destination, (message) => {
+    return this.client.subscribe(destination, (message: IMessage) => {
       try {
-        const data = JSON.parse(message.body);
+        const data = JSON.parse(message.body) as T;
         callback(data);
       } catch (error) {
         console.error('Error parsing WebSocket message:', error);
-        callback(message.body);
       }
     });
   }
 
-  publish(destination: string, body: any): void {
+  publish(destination: string, body: unknown): void {
     if (!this.client?.connected) {
       console.warn('WebSocket not connected, cannot publish');
       return;

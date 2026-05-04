@@ -1,6 +1,8 @@
 import { Injectable, inject } from '@angular/core';
-import axios, { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { ToastService } from './toast.service';
+import { Router } from '@angular/router';
+import { API_BASE_URL } from '../app/config/api.config';
 
 @Injectable({
   providedIn: 'root'
@@ -8,10 +10,11 @@ import { ToastService } from './toast.service';
 export class AxiosClientService {
   private axiosClient: AxiosInstance;
   private readonly toastService = inject(ToastService);
+  private readonly router = inject(Router);
 
   constructor() {
     this.axiosClient = axios.create({
-      baseURL: 'http://localhost:8080/api', // TODO: Make configurable
+      baseURL: API_BASE_URL,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -54,7 +57,7 @@ export class AxiosClientService {
 
           const refreshToken = localStorage.getItem('refresh_token');
           if (refreshToken) {
-            const refreshUrl = `${originalRequest.baseURL || 'http://localhost:8080/api'}/auth/refresh`;
+            const refreshUrl = `${originalRequest.baseURL || API_BASE_URL}/auth/refresh`;
             return axios.post(refreshUrl, { refresh_token: refreshToken }, {
               headers: { 'Content-Type': 'application/json' }
             }).then((res) => {
@@ -70,13 +73,12 @@ export class AxiosClientService {
               console.error('Refresh token failed', refreshError);
               localStorage.removeItem('access_token');
               localStorage.removeItem('refresh_token');
-              // Redirect to login handled by AuthGuard or here
-              window.location.href = '/login';
+              this.router.navigate(['/login']);
               return Promise.reject(refreshError);
             });
           } else {
              localStorage.removeItem('access_token');
-             window.location.href = '/login';
+             this.router.navigate(['/login']);
           }
         }
 
@@ -92,23 +94,23 @@ export class AxiosClientService {
   }
 
   // Expose axios methods
-  get<T = any>(url: string, config?: any): Promise<T> {
+  get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
     return this.axiosClient.get(url, config);
   }
 
-  post<T = any>(url: string, data?: any, config?: any): Promise<T> {
+  post<T, D = unknown>(url: string, data?: D, config?: AxiosRequestConfig<D>): Promise<T> {
     return this.axiosClient.post(url, data, config);
   }
 
-  put<T = any>(url: string, data?: any, config?: any): Promise<T> {
+  put<T, D = unknown>(url: string, data?: D, config?: AxiosRequestConfig<D>): Promise<T> {
     return this.axiosClient.put(url, data, config);
   }
 
-  delete<T = any>(url: string, config?: any): Promise<T> {
+  delete<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
     return this.axiosClient.delete(url, config);
   }
 
-  patch<T = any>(url: string, data?: any, config?: any): Promise<T> {
+  patch<T, D = unknown>(url: string, data?: D, config?: AxiosRequestConfig<D>): Promise<T> {
     return this.axiosClient.patch(url, data, config);
   }
 }

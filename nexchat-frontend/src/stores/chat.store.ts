@@ -59,10 +59,10 @@ export class ChatStore {
         this.messages.update(current => [...current, message]);
     }
 
-    updateMessage(clientMessageId: string, updatedMessage: Message): void {
+    updateMessage(identifier: string | number, updatedMessage: Message): void {
         this.messages.update(current =>
             current.map(msg =>
-                msg.clientMessageId === clientMessageId ? updatedMessage : msg
+                msg.id === identifier || msg.clientMessageId === identifier ? updatedMessage : msg
             )
         );
     }

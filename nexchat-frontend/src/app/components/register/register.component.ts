@@ -1,6 +1,6 @@
 import { Component, inject, ChangeDetectionStrategy, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
+import { FormBuilder, FormGroup, FormArray, ReactiveFormsModule, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService, RegisterRequest } from '../../../services/auth.service';
 import { AuthStore } from '../../../stores/auth.store';
@@ -78,8 +78,10 @@ export class RegisterComponent {
     private markFormGroupTouched(formGroup: FormGroup): void {
         Object.values(formGroup.controls).forEach(control => {
             control.markAsTouched();
-            if ((control as any).controls) {
+            if (control instanceof FormGroup) {
                 this.markFormGroupTouched(control as FormGroup);
+            } else if (control instanceof FormArray) {
+                control.controls.forEach(nestedControl => nestedControl.markAsTouched());
             }
         });
     }

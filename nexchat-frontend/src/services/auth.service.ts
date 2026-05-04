@@ -23,7 +23,7 @@ export interface LoginResponse {
 }
 
 export interface UserProfile {
-    id?: number;
+    id: number;
     username: string;
     email: string;
     fullName?: string;
@@ -65,8 +65,9 @@ export class AuthService {
             
             // Navigate to inbox
             this.router.navigate(['/inbox']);
-        } catch (error: any) {
-            this.authStore.setError(error.message || 'Registration failed');
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Registration failed';
+            this.authStore.setError(message);
             throw error;
         } finally {
             this.authStore.setLoading(false);
@@ -91,8 +92,9 @@ export class AuthService {
 
             // Navigate to inbox
             this.router.navigate(['/inbox']);
-        } catch (error: any) {
-            this.authStore.setError(error.message || 'Login failed');
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Login failed';
+            this.authStore.setError(message);
             throw error;
         } finally {
             this.authStore.setLoading(false);
@@ -131,7 +133,7 @@ export class AuthService {
     private async loadUserProfile(): Promise<void> {
          try {
              const userProfile = await this.axiosClient.get<UserProfile>('/users/me');
-             this.authStore.setAuthenticated(userProfile as any); // Using as any because AuthStore might expect specific user shape
+             this.authStore.setAuthenticated(userProfile);
          } catch (e) {
              throw e;
          }
