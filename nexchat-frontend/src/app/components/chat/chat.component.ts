@@ -5,8 +5,10 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angula
 import { ChatService, Message } from '../../../services/chat.service';
 import { ChatStore } from '../../../stores/chat.store';
 import { AuthService } from '../../../services/auth.service';
+import { UserService } from '../../../services/user.service';
 import { WebSocketService } from '../../../services/websocket.service';
 import { v4 as uuidv4 } from 'uuid';
+import { StompSubscription } from '@stomp/stompjs';
 
 @Component({
     selector: 'app-chat',
@@ -21,6 +23,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     private readonly chatService = inject(ChatService);
     private readonly chatStore = inject(ChatStore);
     private readonly authService = inject(AuthService);
+    private readonly userService = inject(UserService);
     private readonly wsService = inject(WebSocketService);
     private readonly fb = inject(FormBuilder);
 
@@ -35,10 +38,10 @@ export class ChatComponent implements OnInit, OnDestroy {
     typingUsers = this.chatStore.typingUsers;
     isSending = this.chatStore.isSendingMessage;
 
-    private chatSubscription: any;
-    private typingSubscription: any;
-    private presenceSubscription: any;
-    private typingTimeout: any;
+    private chatSubscription: StompSubscription | null = null;
+    private typingSubscription: StompSubscription | null = null;
+    private presenceSubscription: StompSubscription | null = null;
+    private typingTimeout: ReturnType<typeof setTimeout> | null = null;
 
     ngOnInit(): void {
         this.conversationId = Number(this.route.snapshot.paramMap.get('id'));
@@ -72,9 +75,10 @@ export class ChatComponent implements OnInit, OnDestroy {
 
             // Connect WebSocket if not connected
             if (!this.wsService.getClient()?.connected) {
-                this.wsService.connect(() => {
-                    this.setupWebSocketSubscriptions();
-                });
+                this.wsService.connect(
+                    () => this.setupWebSocketSubscriptions(),
+                    () => void this.loadMessages()
+                );
             } else {
                 this.setupWebSocketSubscriptions();
             }
@@ -88,42 +92,125 @@ export class ChatComponent implements OnInit, OnDestroy {
         const stomp = this.wsService.getClient();
         if (!stomp) return;
 
-        // Subscribe to conversation messages
-        this.chatSubscription = this.wsService.subscribe(
+        this.unsubscribeWsChannels();
+
+        // Payload envelope: { event, data } per FRONTEND_WS_INTEGRATION_GUIDE.md
+        this.chatSubscription = this.wsService.subscribe<unknown>(
             `/topic/conversations/${this.conversationId}`,
-            (message) => this.handleMessageEvent(message)
+            (payload) => this.handleConversationWsPayload(payload)
         );
 
-        // Subscribe to typing indicators
-        this.typingSubscription = this.wsService.subscribe(
+        this.typingSubscription = this.wsService.subscribe<unknown>(
             `/topic/typing/${this.conversationId}`,
-            (message) => this.handleTypingEvent(message)
+            (payload) => this.handleTypingEvent(payload)
         );
 
-        // Subscribe to presence updates
-        this.presenceSubscription = this.wsService.subscribe(
+        this.presenceSubscription = this.wsService.subscribe<unknown>(
             '/topic/presence',
-            (message) => this.handlePresenceEvent(message)
+            (payload) => this.handlePresenceEvent(payload)
         );
     }
 
-    private handleMessageEvent(data: any): void {
-        switch (data.event) {
-            case 'MESSAGE_NEW':
-                this.chatStore.addMessage(data.message);
+    private unsubscribeWsChannels(): void {
+        this.chatSubscription?.unsubscribe();
+        this.chatSubscription = null;
+        this.typingSubscription?.unsubscribe();
+        this.typingSubscription = null;
+        this.presenceSubscription?.unsubscribe();
+        this.presenceSubscription = null;
+    }
+
+    /** WS envelope `{ event, data }` or legacy flat shapes */
+    private handleConversationWsPayload(raw: unknown): void {
+        const env = this.unwrapWsEnvelope(raw);
+        if (!env) return;
+
+        const { event, data } = env;
+        if (!event || !data || typeof data !== 'object') return;
+
+        const d = data as Record<string, unknown>;
+        const convId = d['conversationId'];
+        if (typeof convId === 'number' && convId !== this.conversationId) return;
+
+        switch (event) {
+            case 'MESSAGE_NEW': {
+                const msg = this.mapWsMessageNewToMessage(d);
+                if (!msg) return;
+                const existingByClient = msg.clientMessageId
+                    ? this.messages().find(m => m.clientMessageId === msg.clientMessageId)
+                    : undefined;
+                if (existingByClient) {
+                    this.chatStore.updateMessage(msg.clientMessageId!, msg);
+                } else if (!this.messages().some(m => m.id === msg.id && msg.id > 0)) {
+                    this.chatStore.addMessage(msg);
+                }
                 this.scrollToBottom();
-                this.markAsRead(); // Mark as read if user is in the room
+                void this.markAsRead();
                 break;
-            case 'MESSAGE_EDITED':
-                this.chatStore.updateMessage(data.message.id, data.message);
+            }
+            case 'MESSAGE_EDITED': {
+                const id = d['id'];
+                if (typeof id !== 'number') return;
+                const partial: Partial<Message> = {};
+                if (typeof d['content'] === 'string') partial.content = d['content'];
+                if (typeof d['editedAt'] === 'string') partial.editedAt = d['editedAt'];
+                this.chatStore.mergeMessage(id, partial);
                 break;
-            case 'MESSAGE_DELETED':
-                this.chatStore.removeMessage(data.message.id);
+            }
+            case 'MESSAGE_DELETED': {
+                const id = d['id'];
+                if (typeof id === 'number') this.chatStore.removeMessage(id);
                 break;
+            }
             case 'READ_RECEIPT':
-                // Update message status if needed
+                // Optional: sync read pointers / badges when store supports it
+                break;
+            default:
                 break;
         }
+    }
+
+    private unwrapWsEnvelope(raw: unknown): { event: string; data: unknown } | null {
+        if (!raw || typeof raw !== 'object') return null;
+        const o = raw as Record<string, unknown>;
+        if (typeof o['event'] === 'string' && 'data' in o) {
+            return { event: o['event'], data: o['data'] };
+        }
+        return null;
+    }
+
+    private mapWsMessageNewToMessage(d: Record<string, unknown>): Message | null {
+        const id = d['id'];
+        const content = d['content'];
+        const typeRaw = d['type'];
+        const createdAt = d['createdAt'];
+        const sender = d['sender'] as Record<string, unknown> | undefined;
+        if (typeof id !== 'number' || typeof content !== 'string' || typeof createdAt !== 'string' || !sender) {
+            return null;
+        }
+        const senderId = sender['id'];
+        const username = sender['username'];
+        if (typeof senderId !== 'number' || typeof username !== 'string') return null;
+
+        const t = typeRaw === 'IMAGE' || typeRaw === 'FILE' ? typeRaw : 'TEXT';
+        const clientMessageId =
+            typeof d['clientMessageId'] === 'string' ? d['clientMessageId'] : undefined;
+
+        return {
+            id,
+            content,
+            type: t,
+            senderId,
+            sender: {
+                id: senderId,
+                username,
+                email: typeof sender['email'] === 'string' ? sender['email'] : '',
+                avatar: typeof sender['avatarUrl'] === 'string' ? sender['avatarUrl'] : undefined
+            },
+            createdAt,
+            status: 'SENT',
+            clientMessageId
+        };
     }
 
     // Read Receipts
@@ -147,8 +234,8 @@ export class ChatComponent implements OnInit, OnDestroy {
         if (!username) return;
 
         try {
-            const users = await this.chatService.searchUsers(username);
-            const user = users.find(u => u.username.toLowerCase() === username.toLowerCase());
+            const res = await this.userService.searchUsers(username);
+            const user = res.content.find(u => u.username.toLowerCase() === username.toLowerCase());
             if (user) {
                 await this.chatService.addParticipants(this.conversationId, [user.id]);
                 // Reload conversation details to update participant list
@@ -186,25 +273,41 @@ export class ChatComponent implements OnInit, OnDestroy {
         }
     }
 
-    private handleTypingEvent(data: any): void {
-        if (data.isTyping) {
-            this.chatStore.addTypingUser(data.user);
+    private handleTypingEvent(raw: unknown): void {
+        const env = this.unwrapWsEnvelope(raw);
+        const payload = (env?.data ?? raw) as Record<string, unknown> | null;
+        if (!payload || typeof payload !== 'object') return;
+
+        const isTyping = payload['isTyping'] === true;
+        let user: Message['sender'] | undefined = payload['user'] as Message['sender'] | undefined;
+        const userId = payload['userId'];
+        const username = payload['username'];
+        if (!user && typeof userId === 'number') {
+            user = {
+                id: userId,
+                username: typeof username === 'string' ? username : 'user',
+                email: ''
+            };
+        }
+        if (!user) return;
+
+        if (isTyping) {
+            this.chatStore.addTypingUser(user);
         } else {
-            this.chatStore.removeTypingUser(data.user.id);
+            this.chatStore.removeTypingUser(user.id);
         }
     }
 
-    private handlePresenceEvent(data: any): void {
+    private handlePresenceEvent(data: unknown): void {
         // Handle presence updates if needed
         console.log('Presence update:', data);
     }
 
     private cleanupSubscriptions(): void {
-        this.chatSubscription?.unsubscribe();
-        this.typingSubscription?.unsubscribe();
-        this.presenceSubscription?.unsubscribe();
+        this.unsubscribeWsChannels();
         if (this.typingTimeout) {
             clearTimeout(this.typingTimeout);
+            this.typingTimeout = null;
         }
     }
 
@@ -249,7 +352,7 @@ export class ChatComponent implements OnInit, OnDestroy {
             this.chatStore.updateMessage(tempId, sentMessage);
         } catch (error) {
             // Mark as failed
-            this.chatStore.updateMessage(tempId, { ...tempMessage, status: 'FAILED' as any });
+            this.chatStore.updateMessage(tempId, { ...tempMessage, status: 'FAILED' });
             console.error('Failed to send message:', error);
         }
     }

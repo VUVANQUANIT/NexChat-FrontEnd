@@ -1,5 +1,14 @@
 import { Injectable, inject } from '@angular/core';
 import { AxiosClientService } from './axios-client.service';
+import { AuthService } from './auth.service';
+import type { ApiConversationCreateRequest, ApiConversationDetail, ApiConversationsPage, ApiMessageRow, ApiMessagesPage, ApiUnreadCountBody } from '../app/api/chat-api.dto';
+import {
+    mapApiConversationDetailToDomain,
+    mapApiConversationsPageToDomain,
+    mapApiMessageRowToMessage,
+    mapApiMessagesPageToDomain,
+    mapApiUnreadCount
+} from '../app/api/chat-api.mapper';
 
 export interface User {
     id: number;
@@ -12,13 +21,17 @@ export interface User {
 
 export interface Conversation {
     id: number;
+    /** Derived display label (group title or other user in private chat). */
     name: string;
-    type: 'DIRECT' | 'GROUP';
+    type: 'PRIVATE' | 'GROUP';
+    title?: string | null;
+    avatarUrl?: string | null;
+    ownerId?: number;
     lastMessage?: Message;
     participants: User[];
     unreadCount: number;
     createdAt: string;
-    updatedAt: string;
+    updatedAt?: string;
 }
 
 export interface Message {
@@ -45,67 +58,122 @@ export interface MessagesResponse {
     hasMore: boolean;
 }
 
+type PagingParams = {
+    limit: number;
+    cursor?: string;
+    beforeId?: number;
+};
+
 @Injectable({
     providedIn: 'root'
 })
 export class ChatService {
     private readonly axiosClient = inject(AxiosClientService);
+    private readonly authService = inject(AuthService);
 
     // Conversations
     async getConversations(cursor?: string, limit: number = 20): Promise<ConversationsResponse> {
-        const params: any = { limit };
+        const params: PagingParams = { limit };
         if (cursor) {
             params.cursor = cursor;
         }
-        return this.axiosClient.get<ConversationsResponse>('/conversations', { params });
+        const raw = await this.axiosClient.get<ApiConversationsPage>('/conversations', { params });
+        return mapApiConversationsPageToDomain(raw);
     }
 
     async getConversation(conversationId: number): Promise<Conversation> {
-        return this.axiosClient.get<Conversation>(`/conversations/${conversationId}`);
+        const raw = await this.axiosClient.get<ApiConversationDetail>(`/conversations/${conversationId}`);
+        return mapApiConversationDetailToDomain(raw, this.authService.currentUser()?.id);
     }
 
     async createDirectConversation(userId: number): Promise<Conversation> {
-        return this.axiosClient.post<Conversation>('/conversations/direct', { userId });
+        const body: ApiConversationCreateRequest = {
+            type: 'PRIVATE',
+            participantIds: [userId],
+            title: null,
+            avatarUrl: null
+        };
+        const raw = await this.axiosClient.post<ApiConversationDetail>('/conversations', body);
+        return mapApiConversationDetailToDomain(raw, this.authService.currentUser()?.id);
     }
 
     async createGroupConversation(name: string, participantIds: number[]): Promise<Conversation> {
-        return this.axiosClient.post<Conversation>('/conversations/group', {
-            name,
-            participantIds
-        });
+        const body: ApiConversationCreateRequest = {
+            type: 'GROUP',
+            participantIds,
+            title: name,
+            avatarUrl: null
+        };
+        const raw = await this.axiosClient.post<ApiConversationDetail>('/conversations', body);
+        return mapApiConversationDetailToDomain(raw, this.authService.currentUser()?.id);
+    }
+
+    async createConversation(payload: ApiConversationCreateRequest): Promise<Conversation> {
+        const raw = await this.axiosClient.post<ApiConversationDetail>('/conversations', payload);
+        return mapApiConversationDetailToDomain(raw, this.authService.currentUser()?.id);
+    }
+
+    async updateConversation(conversationId: number, payload: { title?: string; avatarUrl?: string }): Promise<Conversation> {
+        await this.axiosClient.patch(`/conversations/${conversationId}`, payload);
+        return this.getConversation(conversationId);
     }
 
     // Messages
     async getMessages(conversationId: number, beforeId?: number, limit: number = 30): Promise<MessagesResponse> {
-        const params: any = { limit };
+        const params: PagingParams = { limit };
         if (beforeId) {
             params.beforeId = beforeId;
         }
-        return this.axiosClient.get<MessagesResponse>(`/conversations/${conversationId}/messages`, { params });
+        const raw = await this.axiosClient.get<ApiMessagesPage>(`/conversations/${conversationId}/messages`, { params });
+        const mapped = mapApiMessagesPageToDomain(raw);
+        return {
+            items: mapped.items,
+            nextCursor: mapped.nextCursor,
+            hasMore: mapped.hasMore
+        };
     }
 
     async sendMessage(conversationId: number, content: string, type: 'TEXT' | 'IMAGE' | 'FILE' = 'TEXT', clientMessageId?: string): Promise<Message> {
-        return this.axiosClient.post<Message>(`/conversations/${conversationId}/messages`, {
+        const raw = await this.axiosClient.post<ApiMessageRow>(`/conversations/${conversationId}/messages`, {
             content,
             type,
             clientMessageId
         });
+        return mapApiMessageRowToMessage(raw);
     }
 
     async editMessage(conversationId: number, messageId: number, content: string): Promise<Message> {
-        return this.axiosClient.put<Message>(`/conversations/${conversationId}/messages/${messageId}`, {
+        const raw = await this.axiosClient.patch<ApiMessageRow>(`/messages/${messageId}`, {
             content
         });
+        return mapApiMessageRowToMessage(raw);
     }
 
     async deleteMessage(conversationId: number, messageId: number): Promise<void> {
-        return this.axiosClient.delete(`/conversations/${conversationId}/messages/${messageId}`);
+        return this.axiosClient.delete(`/messages/${messageId}`);
     }
 
     // Read receipts
     async markAsRead(conversationId: number, lastReadMessageId: number): Promise<void> {
         return this.axiosClient.post(`/conversations/${conversationId}/read`, {
             lastReadMessageId
+        });
+    }
+
+    async markDelivered(messageIds: number[]): Promise<void> {
+        return this.axiosClient.post('/messages/delivered', { messageIds });
+    }
+
+    async getUnreadCount(conversationId: number): Promise<{ unreadCount: number }> {
+        const raw = await this.axiosClient.get<ApiUnreadCountBody>(`/conversations/${conversationId}/unread-count`);
+        return mapApiUnreadCount(raw);
+    }
+
+    async uploadImage(file: File): Promise<{ url: string }> {
+        const formData = new FormData();
+        formData.append('file', file);
+        return this.axiosClient.post<{ url: string }, FormData>('/uploads/images', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
         });
     }
 
@@ -118,12 +186,5 @@ export class ChatService {
 
     async removeParticipant(conversationId: number, userId: number): Promise<void> {
         return this.axiosClient.delete(`/conversations/${conversationId}/participants/${userId}`);
-    }
-
-    // Users search
-    async searchUsers(query: string): Promise<User[]> {
-        return this.axiosClient.get<User[]>('/users/search', {
-            params: { q: query }
-        });
     }
 }

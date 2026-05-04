@@ -1,6 +1,8 @@
 import { Injectable, inject } from '@angular/core';
-import axios, { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { ToastService } from './toast.service';
+import { Router } from '@angular/router';
+import { API_BASE_URL } from '../app/config/api.config';
 
 @Injectable({
   providedIn: 'root'
@@ -8,10 +10,11 @@ import { ToastService } from './toast.service';
 export class AxiosClientService {
   private axiosClient: AxiosInstance;
   private readonly toastService = inject(ToastService);
+  private readonly router = inject(Router);
 
   constructor() {
     this.axiosClient = axios.create({
-      baseURL: 'http://localhost:8080/api', // TODO: Make configurable
+      baseURL: API_BASE_URL,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -33,6 +36,11 @@ export class AxiosClientService {
         if (token && config.headers) {
           config.headers.Authorization = `Bearer ${token}`;
         }
+        console.info('[API] request', {
+          method: config.method?.toUpperCase(),
+          url: `${config.baseURL || API_BASE_URL}${config.url || ''}`,
+          params: config.params
+        });
         return config;
       },
       (error) => Promise.reject(error)
@@ -41,16 +49,51 @@ export class AxiosClientService {
     // Response interceptor: Handle errors and unwrap data
     this.axiosClient.interceptors.response.use(
       (response: AxiosResponse) => {
+        console.info('[API] response', {
+          status: response.status,
+          url: `${response.config.baseURL || API_BASE_URL}${response.config.url || ''}`
+        });
         // Backend wraps responses in { success, message, data }
         return response.data?.data || response.data;
       },
       (error) => {
-        if (error.response?.status === 401) {
+        console.error('[API] error', {
+          status: error?.response?.status,
+          url: `${error?.config?.baseURL || API_BASE_URL}${error?.config?.url || ''}`,
+          message: error?.response?.data?.message || error?.message
+        });
+        const originalRequest = error.config;
+
+        if (error.response?.status === 401 && !originalRequest._retry) {
           // Token expired or invalid
-          console.error('Token expired or invalid');
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
-          // TODO: Redirect to login or attempt refresh
+          console.warn('Token expired or invalid, attempting refresh...');
+          originalRequest._retry = true;
+
+          const refreshToken = localStorage.getItem('refresh_token');
+          if (refreshToken) {
+            const refreshUrl = `${originalRequest.baseURL || API_BASE_URL}/auth/refresh`;
+            return axios.post(refreshUrl, { refresh_token: refreshToken }, {
+              headers: { 'Content-Type': 'application/json' }
+            }).then((res) => {
+              const data = res.data?.data || res.data;
+              localStorage.setItem('access_token', data.access_token);
+              if (data.refresh_token) {
+                localStorage.setItem('refresh_token', data.refresh_token);
+              }
+              // Update authorization header for the original request
+              originalRequest.headers.Authorization = `Bearer ${data.access_token}`;
+              return this.axiosClient(originalRequest);
+            }).catch((refreshError) => {
+              console.error('Refresh token failed', refreshError);
+              localStorage.removeItem('access_token');
+              localStorage.removeItem('refresh_token');
+              this.router.navigate(['/login']);
+              return Promise.reject(refreshError);
+            });
+          } else {
+             localStorage.removeItem('access_token');
+             this.router.navigate(['/login']);
+          }
         }
 
         const backendError = error.response?.data;
@@ -65,23 +108,23 @@ export class AxiosClientService {
   }
 
   // Expose axios methods
-  get<T = any>(url: string, config?: any): Promise<T> {
+  get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
     return this.axiosClient.get(url, config);
   }
 
-  post<T = any>(url: string, data?: any, config?: any): Promise<T> {
+  post<T, D = unknown>(url: string, data?: D, config?: AxiosRequestConfig<D>): Promise<T> {
     return this.axiosClient.post(url, data, config);
   }
 
-  put<T = any>(url: string, data?: any, config?: any): Promise<T> {
+  put<T, D = unknown>(url: string, data?: D, config?: AxiosRequestConfig<D>): Promise<T> {
     return this.axiosClient.put(url, data, config);
   }
 
-  delete<T = any>(url: string, config?: any): Promise<T> {
+  delete<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
     return this.axiosClient.delete(url, config);
   }
 
-  patch<T = any>(url: string, data?: any, config?: any): Promise<T> {
+  patch<T, D = unknown>(url: string, data?: D, config?: AxiosRequestConfig<D>): Promise<T> {
     return this.axiosClient.patch(url, data, config);
   }
 }

@@ -3,6 +3,14 @@ import { Router } from '@angular/router';
 import { AxiosClientService } from './axios-client.service';
 import { AuthStore } from '../stores/auth.store';
 
+export interface RegisterRequest {
+    fullName: string;
+    username: string;
+    email: string;
+    password: string;
+    confirmPassword?: string;
+}
+
 export interface LoginRequest {
     username: string;
     password: string;
@@ -11,12 +19,16 @@ export interface LoginRequest {
 export interface LoginResponse {
     access_token: string;
     refresh_token?: string;
-    user: {
-        id: number;
-        username: string;
-        email: string;
-        isOnline?: boolean;
-    };
+    expiresIn?: string;
+    token_type?: string;
+}
+
+export interface UserProfile {
+    id: number;
+    username: string;
+    email: string;
+    fullName?: string;
+    avatarUrl?: string;
 }
 
 @Injectable({
@@ -36,6 +48,33 @@ export class AuthService {
         this.checkAuthStatus();
     }
 
+    async register(data: RegisterRequest): Promise<void> {
+        this.authStore.setLoading(true);
+        this.authStore.setError(null);
+
+        try {
+            const response = await this.axiosClient.post<LoginResponse>('/auth/register', data);
+            
+            // Store tokens
+            localStorage.setItem('access_token', response.access_token);
+            if (response.refresh_token) {
+                localStorage.setItem('refresh_token', response.refresh_token);
+            }
+
+            // Immediately load user profile
+            await this.loadUserProfile();
+            
+            // Navigate to inbox
+            this.router.navigate(['/inbox']);
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Registration failed';
+            this.authStore.setError(message);
+            throw error;
+        } finally {
+            this.authStore.setLoading(false);
+        }
+    }
+
     async login(credentials: LoginRequest): Promise<void> {
         this.authStore.setLoading(true);
         this.authStore.setError(null);
@@ -49,39 +88,56 @@ export class AuthService {
                 localStorage.setItem('refresh_token', response.refresh_token);
             }
 
-            // Update state
-            this.authStore.setAuthenticated(response.user);
+            // Load user profile
+            await this.loadUserProfile();
 
             // Navigate to inbox
             this.router.navigate(['/inbox']);
-        } catch (error: any) {
-            this.authStore.setError(error.message || 'Login failed');
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Login failed';
+            this.authStore.setError(message);
             throw error;
         } finally {
             this.authStore.setLoading(false);
         }
     }
 
-    logout(): void {
-        // Clear tokens
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-
-        // Clear state
-        this.authStore.setUnauthenticated();
-
-        // Navigate to login
-        this.router.navigate(['/login']);
+    async logout(): Promise<void> {
+        try {
+             await this.axiosClient.post('/auth/logout');
+        } catch (e) {
+             console.error("Logout API failed", e);
+        } finally {
+             // Clear tokens
+             localStorage.removeItem('access_token');
+             localStorage.removeItem('refresh_token');
+     
+             // Clear state
+             this.authStore.setUnauthenticated();
+     
+             // Navigate to login
+             this.router.navigate(['/login']);
+        }
     }
 
-    private checkAuthStatus(): void {
+    private async checkAuthStatus(): Promise<void> {
         const token = localStorage.getItem('access_token');
         if (token) {
-            // TODO: Validate token with backend or decode JWT
-            // For now, assume valid if exists
-            // TODO: Load user info if needed
-            this.authStore.isAuthenticated.set(true);
+             try {
+                 await this.loadUserProfile();
+             } catch (e) {
+                 // Token might be expired or invalid. Error will be caught and interceptor might clear it
+             }
         }
+    }
+
+    private async loadUserProfile(): Promise<void> {
+         try {
+             const userProfile = await this.axiosClient.get<UserProfile>('/users/me');
+             this.authStore.setAuthenticated(userProfile);
+         } catch (e) {
+             throw e;
+         }
     }
 
     getAccessToken(): string | null {
