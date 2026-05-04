@@ -4,6 +4,7 @@ import { AxiosClientService } from './axios-client.service';
 import { AuthStore } from '../stores/auth.store';
 
 export interface RegisterRequest {
+    fullName: string;
     username: string;
     email: string;
     password: string;

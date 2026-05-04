@@ -10,10 +10,10 @@
             <div class="flex justify-between items-center py-4">
                 <h1 class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-400 drop-shadow-md">NexChat</h1>
                 <div class="flex items-center space-x-6">
-                    <a routerLink="/friends" class="text-sm font-medium text-indigo-200 hover:text-white transition flex items-center cursor-pointer">
+                    <button (click)="openFriendSearch()" class="text-sm font-medium text-indigo-200 hover:text-white transition flex items-center cursor-pointer">
                         <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
                         Find Friends
-                    </a>
+                    </button>
                     <span class="text-sm text-slate-300 hidden sm:block">Welcome, <span class="font-semibold text-white">{{ currentUser()?.username }}</span></span>
                     <button (click)="logout()"
                         class="inline-flex items-center px-4 py-2 border border-indigo-300/25 shadow-sm text-sm font-medium rounded-xl text-white bg-indigo-500/10 hover:bg-indigo-500/20 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-indigo-400 transition cursor-pointer">
@@ -103,12 +103,74 @@
                     </div>
                     <h3 class="mt-4 text-lg font-bold text-white tracking-wide">Your inbox is empty</h3>
                     <p class="mt-2 text-sm text-slate-400 max-w-sm mx-auto">Get started by finding friends and sending your first message.</p>
-                    <a routerLink="/friends" class="mt-6 inline-flex items-center px-6 py-3 border border-transparent text-sm font-semibold rounded-xl text-white bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 shadow-lg hover:shadow-indigo-500/50 transition-all duration-300 cursor-pointer">
+                    <button (click)="openFriendSearch()" class="mt-6 inline-flex items-center px-6 py-3 border border-transparent text-sm font-semibold rounded-xl text-white bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 shadow-lg hover:shadow-indigo-500/50 transition-all duration-300 cursor-pointer">
                         Find Friends Now
-                    </a>
+                    </button>
                 </div>
                 }
             </div>
         </div>
     </div>
+
+    @if (showFriendSearch()) {
+    <div class="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-sm" (click)="closeFriendSearch()"></div>
+    <div class="fixed inset-x-0 top-24 z-50 px-4">
+        <div class="max-w-2xl mx-auto rounded-2xl border border-indigo-300/20 bg-slate-900/95 shadow-2xl overflow-hidden">
+            <div class="px-4 py-3 border-b border-indigo-300/10 flex items-center gap-3">
+                <svg class="h-5 w-5 text-indigo-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                </svg>
+                <input
+                    [(ngModel)]="friendSearchQuery"
+                    (input)="onFriendSearchInput()"
+                    (keydown.enter)="$event.preventDefault(); searchFriends()"
+                    type="text"
+                    class="w-full bg-transparent text-white placeholder-slate-400 focus:outline-none"
+                    placeholder="Type a name or username, then press Enter..."
+                    autofocus
+                />
+                <button
+                    (click)="searchFriends()"
+                    class="text-indigo-300 hover:text-white text-sm cursor-pointer"
+                >
+                    Search
+                </button>
+                <button (click)="closeFriendSearch()" class="text-slate-400 hover:text-white cursor-pointer">Esc</button>
+            </div>
+
+            <div class="max-h-[55vh] overflow-y-auto">
+                @if (isSearchingFriends()) {
+                <div class="px-5 py-6 text-sm text-slate-300">Searching...</div>
+                } @else if (friendSearchQuery.trim().length === 0) {
+                <div class="px-5 py-6 text-sm text-slate-400">Type to search friends.</div>
+                } @else if (friendResults().length === 0) {
+                <div class="px-5 py-6 text-sm text-slate-400">No users found.</div>
+                } @else {
+                <ul class="divide-y divide-indigo-300/10">
+                    @for (user of friendResults(); track user.id) {
+                    <li class="px-5 py-4 flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center font-bold">
+                                {{ (user.fullName || user.username).charAt(0).toUpperCase() }}
+                            </div>
+                            <div>
+                                <p class="text-sm font-semibold text-white">{{ user.fullName || user.username }}</p>
+                                <p class="text-xs text-slate-400">&#64;{{ user.username }}</p>
+                            </div>
+                        </div>
+                        <button
+                            (click)="sendFriendRequest(user.id)"
+                            [disabled]="requestingFriendIds().includes(user.id)"
+                            class="inline-flex items-center px-3 py-1.5 border border-indigo-400/35 text-xs font-semibold rounded-lg text-indigo-100 bg-indigo-500/20 hover:bg-indigo-500/35 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {{ requestingFriendIds().includes(user.id) ? 'Sending...' : 'Add Friend' }}
+                        </button>
+                    </li>
+                    }
+                </ul>
+                }
+            </div>
+        </div>
+    </div>
+    }
 </div>

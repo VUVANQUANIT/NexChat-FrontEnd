@@ -23,16 +23,24 @@ export class FriendshipService {
   }
 
   async getRequests(status?: string, direction = 'RECEIVED', page = 0, size = 20): Promise<PageResponse<FriendRequest>> {
-    const params: any = { direction, page, size };
+    const params: { direction: string; page: number; size: number; status?: string } = { direction, page, size };
     if (status) params.status = status;
     return this.axiosClient.get('/friendships/requests', { params });
   }
 
-  async acceptRequest(id: number): Promise<any> {
-    return this.axiosClient.post(`/friendships/requests/${id}/accept`);
+  async acceptRequest(id: number): Promise<{ success: boolean }> {
+    return this.axiosClient.post<{ success: boolean }>(`/friendships/requests/${id}/accept`);
   }
 
-  async rejectRequest(id: number): Promise<any> {
-    return this.axiosClient.post(`/friendships/requests/${id}/reject`);
+  async rejectRequest(id: number): Promise<{ success: boolean }> {
+    return this.axiosClient.post<{ success: boolean }>(`/friendships/requests/${id}/reject`);
+  }
+
+  async blockUser(userId: number): Promise<{ success: boolean }> {
+    return this.axiosClient.post<{ success: boolean }>(`/friendships/${userId}/block`);
+  }
+
+  async unfriend(userId: number): Promise<void> {
+    return this.axiosClient.delete<void>(`/friendships/${userId}`);
   }
 }

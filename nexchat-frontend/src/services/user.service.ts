@@ -19,4 +19,16 @@ export class UserService {
   async searchUsers(query: string, page = 0, size = 20): Promise<PageResponse<UserProfile>> {
     return this.axiosClient.get(`/users/search`, { params: { q: query, page, size } });
   }
+
+  async getMe(): Promise<UserProfile> {
+    return this.axiosClient.get<UserProfile>('/users/me');
+  }
+
+  async updateMe(payload: Partial<Pick<UserProfile, 'fullName' | 'avatarUrl'>>): Promise<UserProfile> {
+    return this.axiosClient.patch<UserProfile>('/users/me', payload);
+  }
+
+  async getUserById(userId: number): Promise<UserProfile> {
+    return this.axiosClient.get<UserProfile>(`/users/${userId}`);
+  }
 }

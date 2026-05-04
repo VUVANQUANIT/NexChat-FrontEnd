@@ -45,6 +45,12 @@ export interface MessagesResponse {
     hasMore: boolean;
 }
 
+export interface ConversationPayload {
+    type: 'DIRECT' | 'GROUP';
+    participantIds: number[];
+    name?: string;
+}
+
 type PagingParams = {
     limit: number;
     cursor?: string;
@@ -81,6 +87,14 @@ export class ChatService {
         });
     }
 
+    async createConversation(payload: ConversationPayload): Promise<Conversation> {
+        return this.axiosClient.post<Conversation>('/conversations', payload);
+    }
+
+    async updateConversation(conversationId: number, payload: { name?: string; avatarUrl?: string }): Promise<Conversation> {
+        return this.axiosClient.patch<Conversation>(`/conversations/${conversationId}`, payload);
+    }
+
     // Messages
     async getMessages(conversationId: number, beforeId?: number, limit: number = 30): Promise<MessagesResponse> {
         const params: PagingParams = { limit };
@@ -99,19 +113,35 @@ export class ChatService {
     }
 
     async editMessage(conversationId: number, messageId: number, content: string): Promise<Message> {
-        return this.axiosClient.put<Message>(`/conversations/${conversationId}/messages/${messageId}`, {
+        return this.axiosClient.patch<Message>(`/messages/${messageId}`, {
             content
         });
     }
 
     async deleteMessage(conversationId: number, messageId: number): Promise<void> {
-        return this.axiosClient.delete(`/conversations/${conversationId}/messages/${messageId}`);
+        return this.axiosClient.delete(`/messages/${messageId}`);
     }
 
     // Read receipts
     async markAsRead(conversationId: number, lastReadMessageId: number): Promise<void> {
         return this.axiosClient.post(`/conversations/${conversationId}/read`, {
             lastReadMessageId
+        });
+    }
+
+    async markDelivered(messageIds: number[]): Promise<void> {
+        return this.axiosClient.post('/messages/delivered', { messageIds });
+    }
+
+    async getUnreadCount(conversationId: number): Promise<{ unreadCount: number }> {
+        return this.axiosClient.get<{ unreadCount: number }>(`/conversations/${conversationId}/unread-count`);
+    }
+
+    async uploadImage(file: File): Promise<{ url: string }> {
+        const formData = new FormData();
+        formData.append('file', file);
+        return this.axiosClient.post<{ url: string }, FormData>('/uploads/images', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
         });
     }
 

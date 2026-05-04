@@ -21,7 +21,7 @@ export class FriendsComponent implements OnInit {
   private readonly toastService = inject(ToastService);
   readonly currentUser = inject(AuthService).currentUser;
 
-  searchQuery = signal('');
+  searchQuery = '';
   searchResults = signal<UserProfile[]>([]);
   isSearching = signal(false);
 
@@ -33,14 +33,14 @@ export class FriendsComponent implements OnInit {
   }
 
   async onSearch() {
-    if (this.searchQuery().trim().length < 2) {
+    if (this.searchQuery.trim().length < 2) {
       this.searchResults.set([]);
       return;
     }
 
     this.isSearching.set(true);
     try {
-      const res = await this.userService.searchUsers(this.searchQuery().trim());
+      const res = await this.userService.searchUsers(this.searchQuery.trim());
       this.searchResults.set(res.content);
     } catch (e: any) {
       this.toastService.handleBackendError(e);
