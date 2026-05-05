@@ -7,6 +7,14 @@ import { ChatStore } from '../../../stores/chat.store';
 import { AuthService } from '../../../services/auth.service';
 import { UserService } from '../../../services/user.service';
 import { WebSocketService } from '../../../services/websocket.service';
+import {
+    mapWsMessageEditedToPartial,
+    mapWsMessageNewToMessage,
+    parseWsReadReceipt,
+    parseWsStompEnvelope,
+    parseWsTypingPayload
+} from '../../../app/api/ws-chat.mapper';
+import { ENABLE_API_LOGGING } from '../../../app/config/api.config';
 import { v4 as uuidv4 } from 'uuid';
 import { StompSubscription } from '@stomp/stompjs';
 
@@ -94,7 +102,7 @@ export class ChatComponent implements OnInit, OnDestroy {
 
         this.unsubscribeWsChannels();
 
-        // Payload envelope: { event, data } per FRONTEND_WS_INTEGRATION_GUIDE.md
+        // Payload envelope: `{ event, data }` — FRONTEND_WS_INTEGRATION_GUIDE.md §3
         this.chatSubscription = this.wsService.subscribe<unknown>(
             `/topic/conversations/${this.conversationId}`,
             (payload) => this.handleConversationWsPayload(payload)
@@ -105,9 +113,8 @@ export class ChatComponent implements OnInit, OnDestroy {
             (payload) => this.handleTypingEvent(payload)
         );
 
-        this.presenceSubscription = this.wsService.subscribe<unknown>(
-            '/topic/presence',
-            (payload) => this.handlePresenceEvent(payload)
+        this.presenceSubscription = this.wsService.subscribe<unknown>('/topic/presence', (payload) =>
+            this.handlePresenceEvent(payload)
         );
     }
 
@@ -120,21 +127,17 @@ export class ChatComponent implements OnInit, OnDestroy {
         this.presenceSubscription = null;
     }
 
-    /** WS envelope `{ event, data }` or legacy flat shapes */
     private handleConversationWsPayload(raw: unknown): void {
-        const env = this.unwrapWsEnvelope(raw);
+        const env = parseWsStompEnvelope(raw);
         if (!env) return;
 
-        const { event, data } = env;
-        if (!event || !data || typeof data !== 'object') return;
-
-        const d = data as Record<string, unknown>;
+        const { event, data: d } = env;
         const convId = d['conversationId'];
         if (typeof convId === 'number' && convId !== this.conversationId) return;
 
         switch (event) {
             case 'MESSAGE_NEW': {
-                const msg = this.mapWsMessageNewToMessage(d);
+                const msg = mapWsMessageNewToMessage(d);
                 if (!msg) return;
                 const existingByClient = msg.clientMessageId
                     ? this.messages().find(m => m.clientMessageId === msg.clientMessageId)
@@ -149,12 +152,10 @@ export class ChatComponent implements OnInit, OnDestroy {
                 break;
             }
             case 'MESSAGE_EDITED': {
-                const id = d['id'];
-                if (typeof id !== 'number') return;
-                const partial: Partial<Message> = {};
-                if (typeof d['content'] === 'string') partial.content = d['content'];
-                if (typeof d['editedAt'] === 'string') partial.editedAt = d['editedAt'];
-                this.chatStore.mergeMessage(id, partial);
+                const partialFull = mapWsMessageEditedToPartial(d);
+                if (!partialFull?.id) return;
+                const { id, ...patch } = partialFull;
+                this.chatStore.mergeMessage(id, patch);
                 break;
             }
             case 'MESSAGE_DELETED': {
@@ -162,55 +163,17 @@ export class ChatComponent implements OnInit, OnDestroy {
                 if (typeof id === 'number') this.chatStore.removeMessage(id);
                 break;
             }
-            case 'READ_RECEIPT':
-                // Optional: sync read pointers / badges when store supports it
+            case 'READ_RECEIPT': {
+                const r = parseWsReadReceipt(d);
+                if (!r || r.conversationId !== this.conversationId) break;
+                const selfId = this.currentUser()?.id;
+                if (selfId != null && r.userId === selfId) break;
+                this.chatStore.recordPeerReadReceipt(r.userId, r.lastReadMessageId);
                 break;
+            }
             default:
                 break;
         }
-    }
-
-    private unwrapWsEnvelope(raw: unknown): { event: string; data: unknown } | null {
-        if (!raw || typeof raw !== 'object') return null;
-        const o = raw as Record<string, unknown>;
-        if (typeof o['event'] === 'string' && 'data' in o) {
-            return { event: o['event'], data: o['data'] };
-        }
-        return null;
-    }
-
-    private mapWsMessageNewToMessage(d: Record<string, unknown>): Message | null {
-        const id = d['id'];
-        const content = d['content'];
-        const typeRaw = d['type'];
-        const createdAt = d['createdAt'];
-        const sender = d['sender'] as Record<string, unknown> | undefined;
-        if (typeof id !== 'number' || typeof content !== 'string' || typeof createdAt !== 'string' || !sender) {
-            return null;
-        }
-        const senderId = sender['id'];
-        const username = sender['username'];
-        if (typeof senderId !== 'number' || typeof username !== 'string') return null;
-
-        const t = typeRaw === 'IMAGE' || typeRaw === 'FILE' ? typeRaw : 'TEXT';
-        const clientMessageId =
-            typeof d['clientMessageId'] === 'string' ? d['clientMessageId'] : undefined;
-
-        return {
-            id,
-            content,
-            type: t,
-            senderId,
-            sender: {
-                id: senderId,
-                username,
-                email: typeof sender['email'] === 'string' ? sender['email'] : '',
-                avatar: typeof sender['avatarUrl'] === 'string' ? sender['avatarUrl'] : undefined
-            },
-            createdAt,
-            status: 'SENT',
-            clientMessageId
-        };
     }
 
     // Read Receipts
@@ -274,9 +237,8 @@ export class ChatComponent implements OnInit, OnDestroy {
     }
 
     private handleTypingEvent(raw: unknown): void {
-        const env = this.unwrapWsEnvelope(raw);
-        const payload = (env?.data ?? raw) as Record<string, unknown> | null;
-        if (!payload || typeof payload !== 'object') return;
+        const payload = parseWsTypingPayload(raw);
+        if (!payload) return;
 
         const isTyping = payload['isTyping'] === true;
         let user: Message['sender'] | undefined = payload['user'] as Message['sender'] | undefined;
@@ -299,8 +261,9 @@ export class ChatComponent implements OnInit, OnDestroy {
     }
 
     private handlePresenceEvent(data: unknown): void {
-        // Handle presence updates if needed
-        console.log('Presence update:', data);
+        if (ENABLE_API_LOGGING) {
+            console.info('Presence update:', data);
+        }
     }
 
     private cleanupSubscriptions(): void {
@@ -346,14 +309,15 @@ export class ChatComponent implements OnInit, OnDestroy {
         this.messageForm.reset();
         this.scrollToBottom();
 
+        this.chatStore.setSendingMessage(true);
         try {
             const sentMessage = await this.chatService.sendMessage(this.conversationId, content, 'TEXT', tempId);
-            // Update with real message
             this.chatStore.updateMessage(tempId, sentMessage);
         } catch (error) {
-            // Mark as failed
             this.chatStore.updateMessage(tempId, { ...tempMessage, status: 'FAILED' });
             console.error('Failed to send message:', error);
+        } finally {
+            this.chatStore.setSendingMessage(false);
         }
     }
 

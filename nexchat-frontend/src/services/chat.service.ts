@@ -42,6 +42,8 @@ export interface Message {
     sender: User;
     createdAt: string;
     editedAt?: string;
+    /** True after MESSAGE_EDITED / API patch (optional until edited). */
+    isEdited?: boolean;
     status: 'SENDING' | 'SENT' | 'DELIVERED' | 'READ' | 'FAILED';
     clientMessageId?: string; // For optimistic UI
 }

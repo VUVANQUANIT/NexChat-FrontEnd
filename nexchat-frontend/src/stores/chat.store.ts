@@ -24,6 +24,12 @@ export class ChatStore {
     // Typing indicators
     readonly typingUsers = signal<User[]>([]);
 
+    /**
+     * Peers' read pointers for the active conversation (READ_RECEIPT / §3.4).
+     * Map: otherUserId → lastReadMessageId they have read up to.
+     */
+    readonly peerReadReceipts = signal<ReadonlyMap<number, number>>(new Map());
+
     // UI state
     readonly isSendingMessage = signal(false);
 
@@ -98,6 +104,10 @@ export class ChatStore {
         this.typingUsers.update(current =>
             current.filter(u => u.id !== userId)
         );
+    }
+
+    recordPeerReadReceipt(userId: number, lastReadMessageId: number): void {
+        this.peerReadReceipts.update(m => new Map(m).set(userId, lastReadMessageId));
     }
 
     setConversationsLoading(loading: boolean): void {
