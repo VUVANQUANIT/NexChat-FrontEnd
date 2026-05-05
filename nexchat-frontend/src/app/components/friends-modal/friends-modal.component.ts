@@ -39,12 +39,13 @@ export class FriendsModalComponent implements OnInit {
     friendRequests = signal<FriendRequest[]>([]);
     isLoadingRequests = signal(false);
 
-    findQuery = '';
+    /** Signal để OnPush + computed theo dõi đúng khi gõ tìm kiếm */
+    findQuery = signal('');
     findResults = signal<UserProfile[]>([]);
     isSearching = signal(false);
     requestingIds = signal<number[]>([]);
 
-    readonly canShowFindHint = computed(() => this.findQuery.trim().length < 2);
+    readonly canShowFindHint = computed(() => this.findQuery().trim().length < 2);
 
     async ngOnInit(): Promise<void> {
         await Promise.all([this.loadFriends(), this.loadRequests()]);
@@ -85,7 +86,7 @@ export class FriendsModalComponent implements OnInit {
     }
 
     async onFindSearch(): Promise<void> {
-        const q = this.findQuery.trim();
+        const q = this.findQuery().trim();
         if (q.length < 2) {
             this.findResults.set([]);
             return;
