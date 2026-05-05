@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { Client, IMessage, StompSubscription } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 import { AuthService } from './auth.service';
-import { WS_BASE_URL } from '../app/config/api.config';
+import { ENABLE_API_LOGGING, WS_BASE_URL } from '../app/config/api.config';
 
 @Injectable({
   providedIn: 'root'
@@ -14,7 +14,9 @@ export class WebSocketService {
   connect(onConnected?: () => void, onDisconnected?: () => void): void {
     const token = this.authService.getAccessToken();
     if (!token) {
-      console.error('No access token available for WebSocket connection');
+      if (ENABLE_API_LOGGING) {
+        console.error('No access token available for WebSocket connection');
+      }
       return;
     }
 
@@ -30,21 +32,29 @@ export class WebSocketService {
     });
 
     this.client.onConnect = (frame) => {
-      console.log('WebSocket connected:', frame);
+      if (ENABLE_API_LOGGING) {
+        console.info('WebSocket connected:', frame);
+      }
       onConnected?.();
     };
 
     this.client.onDisconnect = () => {
-      console.warn('WebSocket disconnected');
+      if (ENABLE_API_LOGGING) {
+        console.warn('WebSocket disconnected');
+      }
       onDisconnected?.();
     };
 
     this.client.onStompError = (frame) => {
-      console.error('STOMP error:', frame.headers['message']);
+      if (ENABLE_API_LOGGING) {
+        console.error('STOMP error:', frame.headers['message']);
+      }
     };
 
     this.client.onWebSocketError = (error) => {
-      console.error('WebSocket error:', error);
+      if (ENABLE_API_LOGGING) {
+        console.error('WebSocket error:', error);
+      }
     };
 
     this.client.activate();
@@ -63,7 +73,9 @@ export class WebSocketService {
 
   subscribe<T>(destination: string, callback: (message: T) => void): StompSubscription | null {
     if (!this.client?.connected) {
-      console.warn('WebSocket not connected, cannot subscribe');
+      if (ENABLE_API_LOGGING) {
+        console.warn('WebSocket not connected, cannot subscribe');
+      }
       return null;
     }
 
@@ -72,14 +84,18 @@ export class WebSocketService {
         const data = JSON.parse(message.body) as T;
         callback(data);
       } catch (error) {
-        console.error('Error parsing WebSocket message:', error);
+        if (ENABLE_API_LOGGING) {
+          console.error('Error parsing WebSocket message:', error);
+        }
       }
     });
   }
 
   publish(destination: string, body: unknown): void {
     if (!this.client?.connected) {
-      console.warn('WebSocket not connected, cannot publish');
+      if (ENABLE_API_LOGGING) {
+        console.warn('WebSocket not connected, cannot publish');
+      }
       return;
     }
 
