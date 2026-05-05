@@ -1,0 +1,136 @@
+<div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="friends-modal-title">
+    <div class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" (click)="close()"></div>
+    <div class="relative w-full sm:max-w-lg max-h-[90vh] flex flex-col rounded-t-2xl sm:rounded-2xl border border-indigo-400/20 bg-slate-900/95 shadow-2xl overflow-hidden" (click)="$event.stopPropagation()">
+        <div class="flex items-center justify-between px-4 py-3 border-b border-indigo-400/15">
+            <h2 id="friends-modal-title" class="text-lg font-semibold text-white">Bạn bè</h2>
+            <button type="button" (click)="close()" class="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 cursor-pointer" aria-label="Đóng">✕</button>
+        </div>
+
+        <div class="flex border-b border-indigo-400/15 px-2 gap-1">
+            <button type="button" (click)="setTab('friends')"
+                class="flex-1 py-2.5 text-sm font-medium border-b-2 transition cursor-pointer"
+                [class.border-indigo-400]="activeTab() === 'friends'"
+                [class.text-indigo-200]="activeTab() === 'friends'"
+                [class.border-transparent]="activeTab() !== 'friends'"
+                [class.text-slate-500]="activeTab() !== 'friends'">
+                Danh sách
+            </button>
+            <button type="button" (click)="setTab('requests')"
+                class="flex-1 py-2.5 text-sm font-medium border-b-2 transition cursor-pointer"
+                [class.border-indigo-400]="activeTab() === 'requests'"
+                [class.text-indigo-200]="activeTab() === 'requests'"
+                [class.border-transparent]="activeTab() !== 'requests'"
+                [class.text-slate-500]="activeTab() !== 'requests'">
+                Lời mời
+                @if (friendRequests().length > 0) {
+                <span class="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white px-1">{{ friendRequests().length }}</span>
+                }
+            </button>
+            <button type="button" (click)="setTab('find')"
+                class="flex-1 py-2.5 text-sm font-medium border-b-2 transition cursor-pointer"
+                [class.border-indigo-400]="activeTab() === 'find'"
+                [class.text-indigo-200]="activeTab() === 'find'"
+                [class.border-transparent]="activeTab() !== 'find'"
+                [class.text-slate-500]="activeTab() !== 'find'">
+                Tìm thêm
+            </button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-4 min-h-[200px] max-h-[60vh]">
+            @if (activeTab() === 'friends') {
+                @if (isLoadingFriends()) {
+                <p class="text-sm text-slate-400 text-center py-8">Đang tải...</p>
+                } @else if (friends().length === 0) {
+                <p class="text-sm text-slate-400 text-center py-8">Chưa có bạn bè. Chuyển sang tab «Tìm thêm» để gửi lời mời.</p>
+                } @else {
+                <ul class="divide-y divide-indigo-400/10">
+                    @for (f of friends(); track f.id) {
+                    <li class="py-3 flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center text-sm font-bold flex-shrink-0">
+                                {{ f.username.charAt(0).toUpperCase() }}
+                            </div>
+                            <span class="text-sm font-medium text-white truncate">{{ f.username }}</span>
+                        </div>
+                        <button type="button" (click)="startChatWithFriend(f)"
+                            class="flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg bg-indigo-500/30 text-indigo-100 hover:bg-indigo-500/50 border border-indigo-400/30 cursor-pointer">
+                            Nhắn tin
+                        </button>
+                    </li>
+                    }
+                </ul>
+                }
+            }
+
+            @if (activeTab() === 'requests') {
+                @if (isLoadingRequests()) {
+                <p class="text-sm text-slate-400 text-center py-8">Đang tải...</p>
+                } @else if (friendRequests().length === 0) {
+                <p class="text-sm text-slate-400 text-center py-8">Không có lời mời chờ xử lý.</p>
+                } @else {
+                <ul class="divide-y divide-indigo-400/10">
+                    @for (req of friendRequests(); track req.id) {
+                    <li class="py-3 flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <div class="w-10 h-10 rounded-full bg-pink-500/40 flex items-center justify-center text-sm font-bold flex-shrink-0">
+                                {{ req.requesterUsername.charAt(0).toUpperCase() }}
+                            </div>
+                            <div class="min-w-0">
+                                <p class="text-sm font-medium text-white truncate">{{ req.requesterUsername }}</p>
+                                <p class="text-xs text-slate-500">Muốn kết bạn với bạn</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-2 flex-shrink-0">
+                            <button type="button" (click)="acceptRequest(req.id)" class="px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-500/25 text-emerald-200 border border-emerald-400/30 hover:bg-emerald-500/40 cursor-pointer">Đồng ý</button>
+                            <button type="button" (click)="rejectRequest(req.id)" class="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-700/80 text-slate-200 border border-slate-500/30 hover:bg-slate-600 cursor-pointer">Từ chối</button>
+                        </div>
+                    </li>
+                    }
+                </ul>
+                }
+            }
+
+            @if (activeTab() === 'find') {
+            <div class="space-y-3">
+                <div class="flex gap-2">
+                    <input type="text" [ngModel]="findQuery()" (ngModelChange)="findQuery.set($event)"
+                        (keydown.enter)="onFindSearch(); $event.preventDefault()"
+                        class="flex-1 rounded-xl bg-slate-800/80 border border-indigo-400/20 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                        placeholder="Tên hoặc username (tối thiểu 2 ký tự)" />
+                    <button type="button" (click)="onFindSearch()" [disabled]="isSearching()"
+                        class="px-4 py-2 rounded-xl text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50 cursor-pointer">
+                        Tìm
+                    </button>
+                </div>
+                @if (canShowFindHint()) {
+                <p class="text-xs text-slate-500">Gõ ít nhất 2 ký tự rồi bấm Tìm.</p>
+                } @else if (isSearching()) {
+                <p class="text-sm text-slate-400">Đang tìm...</p>
+                } @else if (findResults().length === 0) {
+                <p class="text-sm text-slate-400">Không tìm thấy người dùng.</p>
+                } @else {
+                <ul class="divide-y divide-indigo-400/10">
+                    @for (user of findResults(); track user.id) {
+                    <li class="py-3 flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <div class="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-sm font-bold">
+                                {{ (user.fullName || user.username).charAt(0).toUpperCase() }}
+                            </div>
+                            <div class="min-w-0">
+                                <p class="text-sm font-medium text-white truncate">{{ user.fullName || user.username }}</p>
+                                <p class="text-xs text-slate-500">@{{ user.username }}</p>
+                            </div>
+                        </div>
+                        <button type="button" (click)="sendRequest(user.id!)" [disabled]="requestingIds().includes(user.id!)"
+                            class="text-xs font-semibold px-3 py-1.5 rounded-lg border border-indigo-400/35 bg-indigo-500/20 text-indigo-100 hover:bg-indigo-500/35 cursor-pointer disabled:opacity-50">
+                            {{ requestingIds().includes(user.id!) ? '...' : 'Gửi lời mời' }}
+                        </button>
+                    </li>
+                    }
+                </ul>
+                }
+            </div>
+            }
+        </div>
+    </div>
+</div>

@@ -9,9 +9,15 @@ export function parseWsStompEnvelope(
 ): { event: string; data: Record<string, unknown> } | null {
     if (!raw || typeof raw !== 'object') return null;
     const o = raw as Record<string, unknown>;
-    if (typeof o['event'] !== 'string') return null;
+    if (typeof o['event'] !== 'string') {
+        console.warn('[WS MAPPER] parseWsStompEnvelope: missing/invalid "event" field. Raw:', o);
+        return null;
+    }
     const data = o['data'];
-    if (data == null || typeof data !== 'object') return null;
+    if (data == null || typeof data !== 'object') {
+        console.warn('[WS MAPPER] parseWsStompEnvelope: missing/invalid "data" field. Raw:', o);
+        return null;
+    }
     return { event: o['event'], data: data as Record<string, unknown> };
 }
 
@@ -30,6 +36,7 @@ export function mapWsMessageNewToMessage(d: Record<string, unknown>): Message | 
     const createdAt = d['createdAt'];
     const sender = d['sender'] as Record<string, unknown> | undefined;
     if (typeof id !== 'number' || typeof content !== 'string' || typeof createdAt !== 'string' || !sender) {
+        console.warn('[WS MAPPER] mapWsMessageNewToMessage: validation failed.', { id, content, createdAt, sender });
         return null;
     }
     const senderId = sender['id'];

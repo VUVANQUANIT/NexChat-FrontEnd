@@ -50,9 +50,9 @@ export class LoginComponent {
 
         try {
             await this.authService.login(credentials);
-            // Navigation is handled in AuthService
-        } catch (error) {
-            // Error is handled in AuthService and stored in store
+            await this.router.navigateByUrl('/inbox', { replaceUrl: true });
+        } catch {
+            // Error handled in AuthService → authStore.error
         }
     }
 

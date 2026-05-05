@@ -1,0 +1,57 @@
+<div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="new-conv-title">
+    <div class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" (click)="close()"></div>
+    <div class="relative w-full sm:max-w-md max-h-[90vh] flex flex-col rounded-t-2xl sm:rounded-2xl border border-indigo-400/20 bg-slate-900/95 shadow-2xl overflow-hidden" (click)="$event.stopPropagation()">
+        <div class="flex items-center justify-between px-4 py-3 border-b border-indigo-400/15">
+            <h2 id="new-conv-title" class="text-lg font-semibold text-white">Cuộc trò chuyện mới</h2>
+            <button type="button" (click)="close()" class="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 cursor-pointer" aria-label="Đóng">✕</button>
+        </div>
+
+        <div class="p-4 overflow-y-auto max-h-[55vh] space-y-4">
+            <p class="text-xs text-slate-400">
+                Chọn <strong class="text-slate-200">một</strong> người để chat riêng, hoặc <strong class="text-slate-200">nhiều</strong> người và đặt tên nhóm.
+            </p>
+
+            @if (isGroup()) {
+            <div>
+                <label class="block text-xs font-medium text-slate-400 mb-1">Tên nhóm</label>
+                <input type="text" [(ngModel)]="groupTitle"
+                    class="w-full rounded-xl bg-slate-800/80 border border-indigo-400/20 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                    placeholder="Ví dụ: Nhóm học tập" />
+            </div>
+            }
+
+            @if (isLoading()) {
+            <p class="text-sm text-slate-400 text-center py-6">Đang tải danh sách bạn...</p>
+            } @else if (friends().length === 0) {
+            <p class="text-sm text-amber-200/90 text-center py-6">Bạn chưa có bạn bè nào. Mở «Bạn bè» và gửi lời mời trước.</p>
+            } @else {
+            <ul class="space-y-2">
+                @for (f of friends(); track f.id) {
+                <li>
+                    <label class="flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition"
+                        [class.border-indigo-400/50]="isSelected(f.id)"
+                        [class.bg-indigo-500/15]="isSelected(f.id)"
+                        [class.border-indigo-400/15]="!isSelected(f.id)"
+                        [class.bg-slate-800/40]="!isSelected(f.id)">
+                        <input type="checkbox" class="rounded border-slate-600 text-indigo-500 focus:ring-indigo-500"
+                            [checked]="isSelected(f.id)" (change)="toggle(f.id)" />
+                        <div class="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                            {{ f.username.charAt(0).toUpperCase() }}
+                        </div>
+                        <span class="text-sm font-medium text-white truncate">{{ f.username }}</span>
+                    </label>
+                </li>
+                }
+            </ul>
+            }
+        </div>
+
+        <div class="p-4 border-t border-indigo-400/15 flex justify-end gap-2">
+            <button type="button" (click)="close()" class="px-4 py-2 rounded-xl text-sm text-slate-300 hover:bg-white/10 cursor-pointer">Hủy</button>
+            <button type="button" (click)="start()" [disabled]="isSubmitting() || selectedCount() === 0"
+                class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-lg">
+                @if (isSubmitting()) { ... } @else { Bắt đầu chat }
+            </button>
+        </div>
+    </div>
+</div>

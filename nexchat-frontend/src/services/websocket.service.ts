@@ -80,6 +80,7 @@ export class WebSocketService {
     }
 
     return this.client.subscribe(destination, (message: IMessage) => {
+      console.log('[WS RAW]', destination, message.body);
       try {
         const data = JSON.parse(message.body) as T;
         callback(data);
