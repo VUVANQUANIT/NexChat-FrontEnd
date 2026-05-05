@@ -17,10 +17,40 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
-    access_token: string;
+    access_token?: string;
+    accessToken?: string;
     refresh_token?: string;
+    refreshToken?: string;
     expiresIn?: string;
     token_type?: string;
+}
+
+/** Axios interceptor may unwrap `{ data: ... }` or return nested shapes — normalize tokens. */
+function pickTokens(body: unknown): { access: string | null; refresh: string | null } {
+    if (!body || typeof body !== 'object') {
+        return { access: null, refresh: null };
+    }
+    const root = body as Record<string, unknown>;
+    const inner = root['data'];
+    const bucket =
+        inner && typeof inner === 'object'
+            ? (inner as Record<string, unknown>)
+            : root;
+    const access =
+        asNonEmptyString(bucket['access_token']) ??
+        asNonEmptyString(bucket['accessToken']) ??
+        asNonEmptyString(root['access_token']) ??
+        asNonEmptyString(root['accessToken']);
+    const refresh =
+        asNonEmptyString(bucket['refresh_token']) ??
+        asNonEmptyString(bucket['refreshToken']) ??
+        asNonEmptyString(root['refresh_token']) ??
+        asNonEmptyString(root['refreshToken']);
+    return { access, refresh };
+}
+
+function asNonEmptyString(v: unknown): string | null {
+    return typeof v === 'string' && v.length > 0 ? v : null;
 }
 
 export interface UserProfile {
@@ -54,18 +84,22 @@ export class AuthService {
 
         try {
             const response = await this.axiosClient.post<LoginResponse>('/auth/register', data);
-            
-            // Store tokens
-            localStorage.setItem('access_token', response.access_token);
-            if (response.refresh_token) {
-                localStorage.setItem('refresh_token', response.refresh_token);
+            const { access, refresh } = pickTokens(response);
+            if (!access) {
+                throw new Error('Invalid auth response: missing access token');
+            }
+            localStorage.setItem('access_token', access);
+            if (refresh) {
+                localStorage.setItem('refresh_token', refresh);
             }
 
-            // Immediately load user profile
-            await this.loadUserProfile();
-            
-            // Navigate to inbox
-            this.router.navigate(['/inbox']);
+            try {
+                await this.loadUserProfile();
+            } catch (e) {
+                console.error('Profile fetch failed after register', e);
+            }
+
+            await this.router.navigateByUrl('/inbox', { replaceUrl: true });
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : 'Registration failed';
             this.authStore.setError(message);
@@ -81,18 +115,22 @@ export class AuthService {
 
         try {
             const response = await this.axiosClient.post<LoginResponse>('/auth/login', credentials);
-
-            // Store tokens
-            localStorage.setItem('access_token', response.access_token);
-            if (response.refresh_token) {
-                localStorage.setItem('refresh_token', response.refresh_token);
+            const { access, refresh } = pickTokens(response);
+            if (!access) {
+                throw new Error('Invalid auth response: missing access token');
+            }
+            localStorage.setItem('access_token', access);
+            if (refresh) {
+                localStorage.setItem('refresh_token', refresh);
             }
 
-            // Load user profile
-            await this.loadUserProfile();
+            try {
+                await this.loadUserProfile();
+            } catch (e) {
+                console.error('Profile fetch failed after login', e);
+            }
 
-            // Navigate to inbox
-            this.router.navigate(['/inbox']);
+            await this.router.navigateByUrl('/inbox', { replaceUrl: true });
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : 'Login failed';
             this.authStore.setError(message);
@@ -132,12 +170,13 @@ export class AuthService {
     }
 
     private async loadUserProfile(): Promise<void> {
-         try {
-             const userProfile = await this.axiosClient.get<UserProfile>('/users/me');
-             this.authStore.setAuthenticated(userProfile);
-         } catch (e) {
-             throw e;
-         }
+        const userProfile = await this.axiosClient.get<UserProfile>('/users/me');
+        this.authStore.setAuthenticated(userProfile);
+    }
+
+    /** Used when a route opens with a stored token but the store is not hydrated yet. */
+    async hydrateSessionFromStoredToken(): Promise<void> {
+        await this.loadUserProfile();
     }
 
     getAccessToken(): string | null {

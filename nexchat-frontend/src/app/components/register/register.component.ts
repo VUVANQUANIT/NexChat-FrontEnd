@@ -77,8 +77,8 @@ export class RegisterComponent {
 
         try {
             await this.authService.register(data);
-            // Navigation handled by auth service
-        } catch (error) {
+            await this.router.navigateByUrl('/inbox', { replaceUrl: true });
+        } catch {
             // Error handled by store
         }
     }

@@ -16,6 +16,11 @@ export const routes: Routes = [
         canActivate: [AuthGuard]
     },
     {
+        path: 'inbox/:conversationId',
+        loadComponent: () => import('./components/inbox/inbox.component').then(m => m.InboxComponent),
+        canActivate: [AuthGuard]
+    },
+    {
         path: 'inbox',
         loadComponent: () => import('./components/inbox/inbox.component').then(m => m.InboxComponent),
         canActivate: [AuthGuard]
