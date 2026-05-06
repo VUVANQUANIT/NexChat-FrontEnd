@@ -1,59 +1,96 @@
-# NexchatFrontend
+<div align="center">
+  <h1>💬 NexChat Frontend</h1>
+  <p>A modern, real-time chat application built with Angular 21 and Tailwind CSS.</p>
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 21.2.7.
+  [![CI](https://github.com/USERNAME/NexChat-Frontend/actions/workflows/ci.yml/badge.svg)](https://github.com/USERNAME/NexChat-Frontend/actions/workflows/ci.yml)
+  [![Angular](https://img.shields.io/badge/Angular-21-DD0031?style=flat&logo=angular)](https://angular.dev/)
+  [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4.0-38B2AC?style=flat&logo=tailwind-css)](https://tailwindcss.com/)
+  [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat&logo=typescript)](https://www.typescriptlang.org/)
+</div>
 
-## Development server
+---
 
-To start a local development server, run:
+## 🌟 Features
+
+- **Real-time Messaging**: Powered by WebSockets and STOMP for instant communication.
+- **Modern UI**: Clean, responsive, and beautiful interface designed with Tailwind CSS 4.
+- **User Authentication**: Secure login and registration flows.
+- **Friend Management**: Easily add friends, view friend requests, and start new conversations.
+- **State Management**: Built on top of robust state stores, signals, and RxJS.
+
+## 🚀 Tech Stack
+
+- **Framework**: [Angular 21](https://angular.dev/)
+- **Styling**: [Tailwind CSS 4](https://tailwindcss.com/)
+- **Real-time**: `@stomp/stompjs` and `sockjs-client`
+- **HTTP Client**: `axios`
+- **Testing**: [Vitest](https://vitest.dev/)
+
+## 🛠️ Getting Started
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) (v22 or later recommended)
+- [npm](https://www.npmjs.com/) (v10 or later)
+
+### Installation
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/your-username/NexChat-Frontend.git
+   cd NexChat-Frontend/nexchat-frontend
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+3. **Environment Setup:**
+   Copy the example environment file and configure it:
+   ```bash
+   cp .env.example .env
+   ```
+   *(Ensure you update `.env` with your backend API and WebSocket URLs)*
+
+### Development Server
+
+Run the development server:
 
 ```bash
-ng serve
+npm start
 ```
+Navigate to `http://localhost:4200/`. The application will automatically reload if you change any of the source files.
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+## 🧪 Testing
 
-## Code scaffolding
-
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+To execute unit tests via Vitest:
 
 ```bash
-ng generate component component-name
+npm run test
 ```
 
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+## 📦 Building for Production
+
+To build the project for production:
 
 ```bash
-ng generate --help
+npm run build
 ```
+The build artifacts will be stored in the `dist/` directory, optimized for performance and speed.
 
-## Building
+## ⚙️ CI/CD
 
-To build the project run:
+This project uses **GitHub Actions** for Continuous Integration. Every push and pull request to the `main` branch triggers an automated workflow that:
+- Installs dependencies securely using `npm ci`.
+- Runs unit tests via Vitest.
+- Builds the application to ensure it compiles perfectly.
 
-```bash
-ng build
-```
+Check out the workflow configuration at [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) for more details.
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
+## 📄 Documentation
 
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
-
-```bash
-ng test
-```
-
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+For backend integration details and API specifications, please refer to:
+- [`FRONTEND_INTEGRATION_GUIDE.md`](../FRONTEND_INTEGRATION_GUIDE.md)
+- [`FRONTEND_WS_INTEGRATION_GUIDE.md`](../FRONTEND_WS_INTEGRATION_GUIDE.md)
+- [`CHAT_API_SPEC _DETAILED.md`](../CHAT_API_SPEC _DETAILED.md)
