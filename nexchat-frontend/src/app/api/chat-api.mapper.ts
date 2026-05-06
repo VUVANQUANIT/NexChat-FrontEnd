@@ -55,6 +55,7 @@ export function mapApiMessageRowToMessage(row: ApiMessageRow): Message {
         },
         createdAt: row.createdAt,
         editedAt: row.editedAt ?? undefined,
+        isEdited: row.isEdited || undefined,
         status: 'SENT',
         clientMessageId: row.clientMessageId ?? undefined
     };

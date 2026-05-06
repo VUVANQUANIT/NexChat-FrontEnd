@@ -1,18 +1,34 @@
-import { Component, inject, OnInit, ChangeDetectionStrategy } from '@angular/core';
+import {
+    Component,
+    inject,
+    OnInit,
+    ChangeDetectionStrategy,
+    signal,
+    computed
+} from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { map } from 'rxjs';
 import { ChatService, Conversation } from '../../../services/chat.service';
 import { ChatStore } from '../../../stores/chat.store';
-import { AuthService, UserProfile } from '../../../services/auth.service';
-import { UserService } from '../../../services/user.service';
+import { AuthService } from '../../../services/auth.service';
 import { FriendshipService } from '../../../services/friendship.service';
-import { ToastService } from '../../../services/toast.service';
-import { signal } from '@angular/core';
+import { ChatPanelComponent } from '../chat-panel/chat-panel.component';
+import { FriendsModalComponent } from '../friends-modal/friends-modal.component';
+import { NewConversationModalComponent } from '../new-conversation-modal/new-conversation-modal.component';
 
 @Component({
     selector: 'app-inbox',
-    imports: [CommonModule, FormsModule],
+    standalone: true,
+    imports: [
+        CommonModule,
+        FormsModule,
+        ChatPanelComponent,
+        FriendsModalComponent,
+        NewConversationModalComponent
+    ],
     templateUrl: './inbox.component.html',
     styleUrls: ['./inbox.component.css'],
     changeDetection: ChangeDetectionStrategy.OnPush
@@ -22,37 +38,67 @@ export class InboxComponent implements OnInit {
     private readonly chatStore = inject(ChatStore);
     private readonly authService = inject(AuthService);
     private readonly router = inject(Router);
-    private readonly userService = inject(UserService);
+    private readonly route = inject(ActivatedRoute);
     private readonly friendshipService = inject(FriendshipService);
-    private readonly toastService = inject(ToastService);
 
     conversations = this.chatStore.conversations;
     isLoading = this.chatStore.conversationsLoading;
     hasMore = this.chatStore.hasMoreConversations;
     currentUser = this.authService.currentUser;
-    showFriendSearch = signal(false);
-    friendSearchQuery = '';
-    friendResults = signal<UserProfile[]>([]);
-    isSearchingFriends = signal(false);
-    requestingFriendIds = signal<number[]>([]);
-    private friendSearchDebounce: ReturnType<typeof setTimeout> | null = null;
-    private activeSearchToken = 0;
+
+    /** Synced with route `/inbox/:conversationId` */
+    readonly activeConversationId = toSignal(
+        this.route.paramMap.pipe(
+            map(p => {
+                const raw = p.get('conversationId');
+                const n = raw ? Number(raw) : NaN;
+                return Number.isFinite(n) && n > 0 ? n : null;
+            })
+        ),
+        { initialValue: null as number | null }
+    );
+
+    inboxSearch = signal('');
+    readonly filteredConversations = computed(() => {
+        const q = this.inboxSearch().trim().toLowerCase();
+        const list = this.conversations();
+        if (!q) return list;
+        return list.filter(c => {
+            const name = this.displayName(c).toLowerCase();
+            const preview = (c.lastMessage?.content ?? '').toLowerCase();
+            return name.includes(q) || preview.includes(q);
+        });
+    });
+
+    showFriendsModal = signal(false);
+    showNewChatModal = signal(false);
+    pendingInviteCount = signal(0);
 
     async ngOnInit(): Promise<void> {
-        await this.loadConversations();
+        await this.loadInitialConversations();
+        await this.refreshPendingBadge();
     }
 
-    async loadConversations(): Promise<void> {
-        if (!this.hasMore()) return;
-
+    private async loadInitialConversations(): Promise<void> {
         this.chatStore.setConversationsLoading(true);
+        try {
+            const response = await this.chatService.getConversations(undefined, 20);
+            this.chatStore.setConversations(response.items, response.nextCursor, response.hasMore);
+        } catch (error) {
+            console.error('Failed to load conversations:', error);
+        } finally {
+            this.chatStore.setConversationsLoading(false);
+        }
+    }
 
+    async loadMoreConversations(): Promise<void> {
+        if (!this.hasMore()) return;
+        this.chatStore.setConversationsLoading(true);
         try {
             const response = await this.chatService.getConversations(
                 this.chatStore.conversationsCursor(),
                 20
             );
-
             if (this.conversations().length === 0) {
                 this.chatStore.setConversations(response.items, response.nextCursor, response.hasMore);
             } else {
@@ -65,95 +111,69 @@ export class InboxComponent implements OnInit {
         }
     }
 
-    async loadMoreConversations(): Promise<void> {
-        await this.loadConversations();
+    /** After creating a conversation — refresh list and open thread. */
+    async reloadFeedAndNavigate(conversationId: number): Promise<void> {
+        await this.loadInitialConversations();
+        await this.router.navigate(['/inbox', conversationId]);
     }
 
-    openFriendSearch(): void {
-        this.showFriendSearch.set(true);
+    openFriendsModal(): void {
+        this.showFriendsModal.set(true);
     }
 
-    closeFriendSearch(): void {
-        this.showFriendSearch.set(false);
-        this.friendSearchQuery = '';
-        this.friendResults.set([]);
-        if (this.friendSearchDebounce) {
-            clearTimeout(this.friendSearchDebounce);
-            this.friendSearchDebounce = null;
-        }
+    closeFriendsModal(): void {
+        this.showFriendsModal.set(false);
+        void this.refreshPendingBadge();
     }
 
-    async searchFriends(): Promise<void> {
-        const query = this.friendSearchQuery.trim();
-        if (query.length === 0) {
-            this.friendResults.set([]);
-            return;
-        }
+    openNewChatModal(): void {
+        this.showNewChatModal.set(true);
+    }
 
-        const searchToken = ++this.activeSearchToken;
-        this.isSearchingFriends.set(true);
-        console.info('[FriendSearch] start', { query });
+    closeNewChatModal(): void {
+        this.showNewChatModal.set(false);
+    }
+
+    async refreshPendingBadge(): Promise<void> {
         try {
-            const res = await this.userService.searchUsers(query);
-            if (searchToken !== this.activeSearchToken) {
-                return;
-            }
-            const currentUserId = this.currentUser()?.id;
-            this.friendResults.set(res.content.filter(user => user.id !== currentUserId));
-            console.info('[FriendSearch] success', { query, count: res.content.length });
-        } catch (error) {
-            if (searchToken !== this.activeSearchToken) {
-                return;
-            }
-            console.error('[FriendSearch] failed', { query, error });
-            this.toastService.handleBackendError(error);
-        } finally {
-            if (searchToken === this.activeSearchToken) {
-                this.isSearchingFriends.set(false);
-            }
+            const n = await this.friendshipService.countPendingReceived();
+            this.pendingInviteCount.set(n);
+        } catch {
+            this.pendingInviteCount.set(0);
         }
     }
 
-    onFriendSearchInput(): void {
-        if (this.friendSearchDebounce) {
-            clearTimeout(this.friendSearchDebounce);
-        }
-        this.friendSearchDebounce = setTimeout(() => {
-            this.searchFriends();
-        }, 300);
+    async onNewConversationStarted(id: number): Promise<void> {
+        this.closeNewChatModal();
+        await this.reloadFeedAndNavigate(id);
     }
 
-    async sendFriendRequest(userId: number): Promise<void> {
-        if (this.requestingFriendIds().includes(userId)) return;
-        this.requestingFriendIds.update(ids => [...ids, userId]);
-        try {
-            await this.friendshipService.sendRequest(userId);
-            this.friendResults.update(users => users.filter(user => user.id !== userId));
-            this.toastService.success('Friend request sent!');
-        } catch (error) {
-            this.toastService.handleBackendError(error);
-        } finally {
-            this.requestingFriendIds.update(ids => ids.filter(id => id !== userId));
-        }
+    async onFriendModalOpenChat(id: number): Promise<void> {
+        await this.reloadFeedAndNavigate(id);
     }
 
-    openConversation(conversation: Conversation): void {
-        this.chatStore.setCurrentConversation(conversation);
-        this.router.navigate(['/chat', conversation.id]);
+    selectConversation(conversation: Conversation): void {
+        void this.router.navigate(['/inbox', conversation.id]);
     }
 
-    getConversationDisplayName(conversation: Conversation): string {
+    isConversationActive(c: Conversation): boolean {
+        return this.activeConversationId() === c.id;
+    }
+
+    displayName(conversation: Conversation): string {
         if (conversation.type === 'PRIVATE') {
-            const otherParticipant = conversation.participants.find(p => p.id !== this.currentUser()?.id);
-            return otherParticipant?.username || conversation.name || 'Unknown User';
+            const other = conversation.participants.find(p => p.id !== this.currentUser()?.id);
+            return other?.username || conversation.name || 'Unknown';
         }
         return conversation.name;
     }
 
     getLastMessagePreview(conversation: Conversation): string {
-        if (!conversation.lastMessage) return 'No messages yet';
-
-        const sender = conversation.lastMessage.senderId === this.currentUser()?.id ? 'You' : conversation.lastMessage.sender.username;
+        if (!conversation.lastMessage) return 'Chưa có tin nhắn';
+        const sender =
+            conversation.lastMessage.senderId === this.currentUser()?.id
+                ? 'Bạn'
+                : conversation.lastMessage.sender.username;
         return `${sender}: ${conversation.lastMessage.content}`;
     }
 
@@ -164,14 +184,19 @@ export class InboxComponent implements OnInit {
 
         if (diffInHours < 24) {
             return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        } else if (diffInHours < 168) { // 7 days
-            return date.toLocaleDateString([], { weekday: 'short' });
-        } else {
-            return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
         }
+        if (diffInHours < 168) {
+            return date.toLocaleDateString([], { weekday: 'short' });
+        }
+        return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
     }
 
     logout(): void {
         this.authService.logout();
+    }
+
+    onInboxSearchInput(ev: Event): void {
+        const v = (ev.target as HTMLInputElement).value;
+        this.inboxSearch.set(v);
     }
 }
