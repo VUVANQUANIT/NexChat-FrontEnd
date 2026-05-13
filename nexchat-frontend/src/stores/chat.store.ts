@@ -110,6 +110,20 @@ export class ChatStore {
         this.peerReadReceipts.update(m => new Map(m).set(userId, lastReadMessageId));
     }
 
+    removeConversation(conversationId: number): void {
+        this.conversations.update(current => current.filter(c => c.id !== conversationId));
+        if (this.currentConversationId() === conversationId) {
+            this.currentConversation.set(null);
+            this.currentConversationId.set(null);
+        }
+    }
+
+    updateConversationInList(conversation: Conversation): void {
+        this.conversations.update(current =>
+            current.map(c => c.id === conversation.id ? conversation : c)
+        );
+    }
+
     setConversationsLoading(loading: boolean): void {
         this.conversationsLoading.set(loading);
     }

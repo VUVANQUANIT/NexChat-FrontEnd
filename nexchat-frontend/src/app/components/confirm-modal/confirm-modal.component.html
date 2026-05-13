@@ -1,0 +1,58 @@
+<div class="fixed inset-0 z-50 flex items-center justify-center p-4"
+    role="dialog" aria-modal="true" [attr.aria-labelledby]="'confirm-title'">
+    <!-- Backdrop -->
+    <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" (click)="cancel()"></div>
+
+    <!-- Panel -->
+    <div class="relative w-full max-w-sm flex flex-col rounded-2xl border shadow-2xl overflow-hidden"
+        [class.border-rose-500/30]="isDanger()"
+        [class.border-indigo-400/20]="!isDanger()"
+        [class.bg-slate-900]="true"
+        (click)="$event.stopPropagation()">
+
+        <!-- Icon + title -->
+        <div class="flex flex-col items-center px-6 pt-7 pb-5 text-center">
+            @if (isDanger()) {
+            <div class="w-14 h-14 rounded-full bg-rose-500/15 border border-rose-500/30 flex items-center justify-center mb-4">
+                <svg class="w-7 h-7 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+            </div>
+            } @else {
+            <div class="w-14 h-14 rounded-full bg-indigo-500/15 border border-indigo-400/30 flex items-center justify-center mb-4">
+                <svg class="w-7 h-7 text-indigo-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </div>
+            }
+
+            <h2 id="confirm-title" class="text-lg font-bold text-white">{{ title() }}</h2>
+            <p class="mt-2 text-sm text-slate-400 leading-relaxed">{{ message() }}</p>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex gap-3 px-6 pb-6">
+            <button type="button" (click)="cancel()" [disabled]="isLoading()"
+                class="flex-1 py-2.5 rounded-xl text-sm font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700/50 disabled:opacity-50 cursor-pointer transition">
+                {{ cancelText() }}
+            </button>
+            <button type="button" (click)="confirm()" [disabled]="isLoading()"
+                class="flex-1 inline-flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer shadow-lg transition"
+                [class.bg-rose-600]="isDanger()"
+                [class.hover:bg-rose-500]="isDanger()"
+                [class.bg-indigo-600]="!isDanger()"
+                [class.hover:bg-indigo-500]="!isDanger()">
+                @if (isLoading()) {
+                <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                    <path class="opacity-75" fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                }
+                {{ confirmText() }}
+            </button>
+        </div>
+    </div>
+</div>

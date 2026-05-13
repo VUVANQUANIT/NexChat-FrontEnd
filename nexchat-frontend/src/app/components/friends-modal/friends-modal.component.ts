@@ -6,13 +6,14 @@ import { FriendshipService, FriendRequest, FriendSummary } from '../../../servic
 import { UserProfile, AuthService } from '../../../services/auth.service';
 import { ToastService } from '../../../services/toast.service';
 import { ChatService } from '../../../services/chat.service';
+import { ConfirmModalComponent } from '../confirm-modal/confirm-modal.component';
 
 type FriendsTab = 'friends' | 'requests' | 'find';
 
 @Component({
     selector: 'app-friends-modal',
     standalone: true,
-    imports: [CommonModule, FormsModule],
+    imports: [CommonModule, FormsModule, ConfirmModalComponent],
     templateUrl: './friends-modal.component.html',
     styleUrls: ['./friends-modal.component.css'],
     changeDetection: ChangeDetectionStrategy.OnPush
@@ -46,6 +47,12 @@ export class FriendsModalComponent implements OnInit {
     requestingIds = signal<number[]>([]);
 
     readonly canShowFindHint = computed(() => this.findQuery().trim().length < 2);
+
+    // Unfriend / block confirm
+    showUnfriendConfirm = signal(false);
+    showBlockConfirm = signal(false);
+    actionTarget = signal<FriendSummary | null>(null);
+    isActionLoading = signal(false);
 
     async ngOnInit(): Promise<void> {
         await Promise.all([this.loadFriends(), this.loadRequests()]);
@@ -146,6 +153,60 @@ export class FriendsModalComponent implements OnInit {
             this.close();
         } catch (e) {
             this.toastService.handleBackendError(e);
+        }
+    }
+
+    openUnfriendConfirm(friend: FriendSummary): void {
+        this.actionTarget.set(friend);
+        this.showUnfriendConfirm.set(true);
+    }
+
+    closeUnfriendConfirm(): void {
+        this.showUnfriendConfirm.set(false);
+        this.actionTarget.set(null);
+    }
+
+    async confirmUnfriend(): Promise<void> {
+        const target = this.actionTarget();
+        if (!target) return;
+        this.isActionLoading.set(true);
+        try {
+            await this.friendshipService.unfriend(target.id);
+            this.friends.update(list => list.filter(f => f.id !== target.id));
+            this.toastService.success(`Đã hủy kết bạn với ${target.username}.`);
+            this.pendingCountChanged.emit();
+            this.closeUnfriendConfirm();
+        } catch (e) {
+            this.toastService.handleBackendError(e);
+        } finally {
+            this.isActionLoading.set(false);
+        }
+    }
+
+    openBlockConfirm(friend: FriendSummary): void {
+        this.actionTarget.set(friend);
+        this.showBlockConfirm.set(true);
+    }
+
+    closeBlockConfirm(): void {
+        this.showBlockConfirm.set(false);
+        this.actionTarget.set(null);
+    }
+
+    async confirmBlock(): Promise<void> {
+        const target = this.actionTarget();
+        if (!target) return;
+        this.isActionLoading.set(true);
+        try {
+            await this.friendshipService.blockUser(target.id);
+            this.friends.update(list => list.filter(f => f.id !== target.id));
+            this.toastService.success(`Đã chặn ${target.username}.`);
+            this.pendingCountChanged.emit();
+            this.closeBlockConfirm();
+        } catch (e) {
+            this.toastService.handleBackendError(e);
+        } finally {
+            this.isActionLoading.set(false);
         }
     }
 }

@@ -18,6 +18,8 @@ import { FriendshipService } from '../../../services/friendship.service';
 import { ChatPanelComponent } from '../chat-panel/chat-panel.component';
 import { FriendsModalComponent } from '../friends-modal/friends-modal.component';
 import { NewConversationModalComponent } from '../new-conversation-modal/new-conversation-modal.component';
+import { ProfileModalComponent } from '../profile-modal/profile-modal.component';
+import { WebSocketService } from '../../../services/websocket.service';
 
 @Component({
     selector: 'app-inbox',
@@ -27,7 +29,8 @@ import { NewConversationModalComponent } from '../new-conversation-modal/new-con
         FormsModule,
         ChatPanelComponent,
         FriendsModalComponent,
-        NewConversationModalComponent
+        NewConversationModalComponent,
+        ProfileModalComponent
     ],
     templateUrl: './inbox.component.html',
     styleUrls: ['./inbox.component.css'],
@@ -40,6 +43,7 @@ export class InboxComponent implements OnInit {
     private readonly router = inject(Router);
     private readonly route = inject(ActivatedRoute);
     private readonly friendshipService = inject(FriendshipService);
+    private readonly wsService = inject(WebSocketService);
 
     conversations = this.chatStore.conversations;
     isLoading = this.chatStore.conversationsLoading;
@@ -72,6 +76,7 @@ export class InboxComponent implements OnInit {
 
     showFriendsModal = signal(false);
     showNewChatModal = signal(false);
+    showProfileModal = signal(false);
     pendingInviteCount = signal(0);
 
     async ngOnInit(): Promise<void> {
@@ -134,6 +139,14 @@ export class InboxComponent implements OnInit {
         this.showNewChatModal.set(false);
     }
 
+    openProfileModal(): void {
+        this.showProfileModal.set(true);
+    }
+
+    closeProfileModal(): void {
+        this.showProfileModal.set(false);
+    }
+
     async refreshPendingBadge(): Promise<void> {
         try {
             const n = await this.friendshipService.countPendingReceived();
@@ -192,7 +205,8 @@ export class InboxComponent implements OnInit {
     }
 
     logout(): void {
-        this.authService.logout();
+        this.wsService.disconnect();
+        void this.authService.logout();
     }
 
     onInboxSearchInput(ev: Event): void {

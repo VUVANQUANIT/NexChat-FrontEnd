@@ -142,19 +142,14 @@ export class AuthService {
 
     async logout(): Promise<void> {
         try {
-             await this.axiosClient.post('/auth/logout');
+            await this.axiosClient.post('/auth/logout');
         } catch (e) {
-             console.error("Logout API failed", e);
+            console.error('Logout API failed', e);
         } finally {
-             // Clear tokens
-             localStorage.removeItem('access_token');
-             localStorage.removeItem('refresh_token');
-     
-             // Clear state
-             this.authStore.setUnauthenticated();
-     
-             // Navigate to login
-             this.router.navigate(['/login']);
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            this.authStore.setUnauthenticated();
+            this.router.navigate(['/login']);
         }
     }
 
